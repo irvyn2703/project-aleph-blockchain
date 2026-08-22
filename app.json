@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "project-aleph-blockchain",
+    "name": "Asistente de obra",
     "slug": "project-aleph-blockchain",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,21 +10,50 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0B0F0C"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Fotografiar comprobantes y documentos de la obra.",
+        "NSPhotoLibraryUsageDescription": "Elegir fotos de comprobantes y del expediente."
+      }
     },
     "android": {
+      "package": "com.aleph.obra",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0B0F0C"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 29
+          }
+        }
+      ],
+      "@qvac/sdk/expo-plugin",
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Elegir fotos de comprobantes y del expediente.",
+          "cameraPermission": "Fotografiar comprobantes y documentos de la obra."
+        }
+      ]
+    ]
   }
 }
