@@ -5,10 +5,16 @@ import { ensureLlm, type ProgressHandler } from './models';
 import {
   detectarImportesInventados,
   esConsultaNumericaDirecta,
+  esNoEsta,
+  extraerExcerpts,
+  pareceCopiaDelExcerpt,
   pareceToolCallCrudo,
+  promptDeRedaccion,
+  requiereQuery,
   rescatarToolCall,
+  tieneQuery,
 } from './routing';
-import { executeTool, obraTools, SYSTEM_PROMPT, toolsDisponibles } from './tools';
+import { executeTool, SYSTEM_PROMPT, toolsDisponibles } from './tools';
 
 export {
   detectarImportesInventados,
@@ -100,6 +106,56 @@ export async function tryDeterministicAnswer(userText: string): Promise<string |
 
 const MAX_ITERACIONES_TOOLS = 3;
 
+/**
+ * Segunda pasada: el modelo lee los fragmentos del expediente y contesta.
+ *
+ * El bucle de tools a veces termina con el fragmento correcto recuperado pero
+ * sin respuesta redactada —el modelo emite otro tool-call, o devuelve el JSON
+ * de la tool—. Volcar el excerpt en pantalla mostraba el retrieval crudo: el
+ * usuario veía la barra de estado del teléfono y el encabezado del oficio en
+ * vez de una respuesta.
+ *
+ * Se llama sin `tools` a propósito: con ellas el modelo vuelve a intentar una
+ * llamada en vez de redactar.
+ *
+ * Devuelve `null` cuando la redacción no sirve —vacía, un NO_ESTA, o el
+ * fragmento copiado tal cual—, para que el llamador decida el respaldo.
+ */
+async function redactarConExcerpts(params: {
+  modelId: string;
+  pregunta: string;
+  excerpts: string[];
+  onDelta: (chunk: string) => void;
+}): Promise<string | null> {
+  const run = completion({
+    modelId: params.modelId,
+    history: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: promptDeRedaccion(params.pregunta, params.excerpts) },
+    ],
+    stream: true,
+  });
+
+  let texto = '';
+  for await (const ev of run.events) {
+    if (ev.type === 'contentDelta') {
+      texto += ev.text;
+      params.onDelta(texto);
+    }
+  }
+  const final = await run.final;
+  texto = (final.contentText || texto).trim();
+
+  if (!texto) return null;
+  if (esNoEsta(texto)) return null;
+  // Un tool-call no es una respuesta redactada.
+  if (pareceToolCallCrudo(texto)) return null;
+  // El modelo transcribió el fragmento en vez de responderlo.
+  if (pareceCopiaDelExcerpt(texto, params.excerpts)) return null;
+
+  return texto;
+}
+
 async function runLlmTurn(params: {
   history: HistoryTurn[];
   userText: string;
@@ -156,6 +212,15 @@ async function runLlmTurn(params: {
       if (rescatada) pendientes = [{ name: rescatada.name, args: rescatada.args }];
     }
 
+    // El modelo suele emitir la tool sin su argumento de búsqueda. Para las
+    // tools de texto, la pregunta del usuario ES la query: completarla vale
+    // más que fallar con "Query cannot be empty".
+    pendientes = pendientes.map((call) =>
+      requiereQuery(call.name) && !tieneQuery(call.args)
+        ? { ...call, args: { ...call.args, query: params.userText } }
+        : call
+    );
+
     if (pendientes.length === 0) {
       break;
     }
@@ -176,10 +241,21 @@ async function runLlmTurn(params: {
   if (pareceToolCallCrudo(texto)) {
     if (resultadosTools.length === 0) {
       const delExpediente = await executeTool('buscar_expediente', { query: params.userText });
-      const hits = JSON.parse(delExpediente) as { hits?: { excerpt: string }[] };
-      if (hits.hits?.length) {
+      const excerpts = extraerExcerpts(delExpediente);
+      if (excerpts.length) {
+        const redactado = await redactarConExcerpts({
+          modelId,
+          pregunta: params.userText,
+          excerpts,
+          onDelta: params.onDelta,
+        });
+        if (redactado) {
+          return { text: redactado, fuente: 'llm', toolCalls: ['buscar_expediente'] };
+        }
+        // Sin redacción utilizable, el fragmento crudo sigue siendo mejor que
+        // nada: es fiel al expediente, solo que sin digerir.
         return {
-          text: hits.hits.map((h) => h.excerpt).join('\n\n---\n\n'),
+          text: excerpts.join('\n\n---\n\n'),
           fuente: 'llm',
           toolCalls: ['buscar_expediente'],
         };
@@ -191,6 +267,44 @@ async function runLlmTurn(params: {
       fuente: 'sql',
       toolCalls,
     };
+  }
+
+  // El modelo a veces devuelve el JSON de la tool tal cual en vez de redactar
+  // con esos datos. Mostrar la estructura interna no le sirve a nadie.
+  if (/^\s*[{[]/.test(texto) && /"(error|hits|nota|clave|total)"\s*:/.test(texto)) {
+    const delExpediente = resultadosTools.find((r) => r.includes('"hits"'));
+    const excerpts = delExpediente ? extraerExcerpts(delExpediente) : [];
+    if (excerpts.length) {
+      const redactado = await redactarConExcerpts({
+        modelId,
+        pregunta: params.userText,
+        excerpts,
+        onDelta: params.onDelta,
+      });
+      if (redactado) return { text: redactado, fuente: 'llm', toolCalls };
+      return { text: excerpts.join('\n\n---\n\n'), fuente: 'llm', toolCalls };
+    }
+    const respaldo = await tryDeterministicAnswer(params.userText);
+    return {
+      text: respaldo ?? 'No encontré esa información en el expediente.',
+      fuente: 'sql',
+      toolCalls,
+    };
+  }
+
+  // El bucle terminó —agotó las iteraciones, o el modelo devolvió poco y nada—
+  // pero el expediente sí trajo texto. Redactar con eso es mejor que devolver
+  // una respuesta vacía o de una línea que ignora lo recuperado.
+  const excerpts = resultadosTools.flatMap(extraerExcerpts);
+  if (excerpts.length && (texto.trim().length < 40 || pareceCopiaDelExcerpt(texto, excerpts))) {
+    const redactado = await redactarConExcerpts({
+      modelId,
+      pregunta: params.userText,
+      excerpts,
+      onDelta: params.onDelta,
+    });
+    if (redactado) return { text: redactado, fuente: 'llm', toolCalls };
+    if (!texto.trim()) return { text: excerpts.join('\n\n---\n\n'), fuente: 'llm', toolCalls };
   }
 
   if (resultadosTools.length > 0 && detectarImportesInventados(texto, resultadosTools)) {

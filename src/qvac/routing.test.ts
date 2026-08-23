@@ -2,9 +2,157 @@ import { describe, expect, it } from 'vitest';
 import {
   detectarImportesInventados,
   esConsultaNumericaDirecta,
+  esNoEsta,
+  extraerExcerpts,
+  pareceCopiaDelExcerpt,
   pareceToolCallCrudo,
+  promptDeRedaccion,
+  requiereQuery,
   rescatarToolCall,
+  tieneQuery,
 } from './routing';
+
+/**
+ * El OCR real del oficio, tal como quedó indexado en device.
+ *
+ * Se conserva con su ruido —barra de estado del teléfono, saltos de línea
+ * partiendo el nombre del firmante— porque es exactamente lo que la pasada de
+ * redacción tiene que saber digerir.
+ */
+const EXCERPT_OFICIO = `[legal:1000001840.png]
+23:10
+084 %
+Oficios Presidentepdf
+GOzOilA
+DepeNDENcia:
+AYUNTAMIENTO DE ZONGOZOTL
+SECCION:
+PRESIDENCIA MUNICIPAL
+EXPEDIENTE:
+UNICO
+UC LAURO SANCHEZ LOPEZ
+DIRECTOR GENERAL
+CEASPUE
+PResenTe:
+EL
+QUE SUSCRIBE
+U
+JOEL
+HERNANDEZ
+ZARAGOZA
+PRESIDENTE
+MUNICIPAL
+CONSTITUCIONAL
+DE
+ZONGOZOTLA , PUEBLA, POR ESTE CONDUCTO LE ENVIO UN
+CORDIAL SALUDO`;
+
+describe('requiereQuery / tieneQuery', () => {
+  it('marca las tools de búsqueda de texto', () => {
+    expect(requiereQuery('buscar_expediente')).toBe(true);
+    expect(requiereQuery('buscar_concepto')).toBe(true);
+  });
+
+  it('no marca las tools de importes', () => {
+    expect(requiereQuery('total_obra')).toBe(false);
+    expect(requiereQuery('get_partida')).toBe(false);
+  });
+
+  it('detecta la query faltante que el modelo omite', () => {
+    // El caso real: el modelo llamó buscar_expediente sin query y la tool
+    // falló con "Query cannot be empty".
+    expect(tieneQuery({})).toBe(false);
+    expect(tieneQuery({ query: '' })).toBe(false);
+    expect(tieneQuery({ query: '   ' })).toBe(false);
+  });
+
+  it('acepta una query con contenido', () => {
+    expect(tieneQuery({ query: 'quién firma el oficio' })).toBe(true);
+  });
+});
+
+describe('extraerExcerpts', () => {
+  it('saca los excerpts del resultado de buscar_expediente', () => {
+    const resultado = JSON.stringify({
+      hits: [
+        { score: 0.8, excerpt: EXCERPT_OFICIO },
+        { score: 0.5, excerpt: 'otro fragmento' },
+      ],
+    });
+    expect(extraerExcerpts(resultado)).toEqual([EXCERPT_OFICIO.trim(), 'otro fragmento']);
+  });
+
+  it('devuelve vacío cuando el RAG no encontró nada', () => {
+    expect(extraerExcerpts(JSON.stringify({ hits: [], nota: 'Nada en el índice RAG.' }))).toEqual([]);
+  });
+
+  it('devuelve vacío ante el JSON de una tool de importes', () => {
+    // El resultado de total_obra no tiene hits: no hay nada que redactar.
+    expect(extraerExcerpts('{"obra":"Tanque","total":15400}')).toEqual([]);
+  });
+
+  it('devuelve vacío ante un error de la tool o un JSON roto', () => {
+    expect(extraerExcerpts('{"error":"RAG no disponible"}')).toEqual([]);
+    expect(extraerExcerpts('no es json')).toEqual([]);
+  });
+
+  it('descarta excerpts vacíos', () => {
+    const resultado = JSON.stringify({ hits: [{ excerpt: '   ' }, { excerpt: 'útil' }] });
+    expect(extraerExcerpts(resultado)).toEqual(['útil']);
+  });
+});
+
+describe('promptDeRedaccion', () => {
+  it('incluye la pregunta y el fragmento', () => {
+    const p = promptDeRedaccion('¿Según el oficio quién es el remitente?', [EXCERPT_OFICIO]);
+    expect(p).toContain('¿Según el oficio quién es el remitente?');
+    expect(p).toContain('JOEL');
+    expect(p).toContain('NO_ESTA');
+  });
+
+  it('separa varios fragmentos', () => {
+    const p = promptDeRedaccion('¿qué dice?', ['uno', 'dos']);
+    expect(p).toContain('uno\n---\ndos');
+  });
+});
+
+describe('esNoEsta', () => {
+  it('reconoce la declaración de que el dato no está', () => {
+    expect(esNoEsta('NO_ESTA')).toBe(true);
+    expect(esNoEsta('  no_esta  ')).toBe(true);
+  });
+
+  it('no confunde una respuesta normal', () => {
+    expect(esNoEsta('El remitente es Joel Hernández Zaragoza.')).toBe(false);
+  });
+});
+
+describe('pareceCopiaDelExcerpt', () => {
+  it('detecta el fragmento devuelto tal cual', () => {
+    // El modo de fallo que motivó todo esto: el usuario veía el OCR crudo,
+    // barra de estado del teléfono incluida, en vez de una respuesta.
+    expect(pareceCopiaDelExcerpt(EXCERPT_OFICIO, [EXCERPT_OFICIO])).toBe(true);
+  });
+
+  it('detecta la copia aunque el modelo reformatee los saltos de línea', () => {
+    const reformateado = EXCERPT_OFICIO.replace(/\n/g, ' ');
+    expect(pareceCopiaDelExcerpt(reformateado, [EXCERPT_OFICIO])).toBe(true);
+  });
+
+  it('acepta una redacción genuina', () => {
+    const buena = 'El remitente es Joel Hernández Zaragoza, presidente municipal de Zongozotla.';
+    expect(pareceCopiaDelExcerpt(buena, [EXCERPT_OFICIO])).toBe(false);
+  });
+
+  it('trata el texto vacío como inservible', () => {
+    expect(pareceCopiaDelExcerpt('   ', [EXCERPT_OFICIO])).toBe(true);
+  });
+
+  it('no marca una respuesta corta contra un fragmento corto', () => {
+    // Un fragmento muy chico no da evidencia suficiente de copia.
+    expect(pareceCopiaDelExcerpt('El plazo es de 90 días.', ['90 días'])).toBe(false);
+  });
+});
 
 describe('rescatarToolCall', () => {
   const validas = ['total_obra', 'get_partida', 'buscar_concepto', 'gastado_vs_presupuesto', 'buscar_expediente'];
