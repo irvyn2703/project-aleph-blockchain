@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { deleteDocumento, insertDocumento, updateDocumentoRag } from '../db/queries';
-import { ingestExpedienteText } from '../qvac/rag';
+import { deleteExpedienteChunks, ingestExpedienteText } from '../qvac/rag';
 import type { Documento, DocumentoTipo } from '../types';
 import { classifyDoc, extOf } from './classify';
 
@@ -59,8 +59,8 @@ export async function ingestDocumento(params: {
 
   if (extracted) {
     try {
-      await ingestExpedienteText(`${params.tipo}:${params.name}`, extracted);
-      await updateDocumentoRag(id, 'listo', extracted);
+      const ragChunkIds = await ingestExpedienteText(`${params.tipo}:${params.name}`, extracted);
+      await updateDocumentoRag(id, 'listo', extracted, ragChunkIds);
     } catch (e) {
       warnings.push(`RAG: ${e instanceof Error ? e.message : String(e)}`);
       await updateDocumentoRag(id, 'error', extracted);
@@ -71,17 +71,15 @@ export async function ingestDocumento(params: {
 }
 
 /**
- * Borra un documento del expediente: el archivo copiado a `expediente/` y la
- * fila en `documentos`. Es best-effort con el archivo (`idempotent: true`),
- * porque un doc de seed (`seed://`) o ya borrado a mano no debería frenar el
- * borrado de la fila.
- *
- * Ojo: no hay forma de sacar sus chunks del índice RAG —`@qvac/sdk` no
- * expone un borrado por id—, así que texto de un documento eliminado puede
- * seguir apareciendo en `buscar_expediente` hasta que se reingesten todos
- * los documentos restantes. Conocido, no bloqueante para este MVP.
+ * Borra un documento del expediente: sus chunks del índice RAG, el archivo
+ * copiado a `expediente/` y la fila en `documentos`. Los dos primeros son
+ * best-effort (`ragChunkIds` puede venir vacío en un doc viejo ingestado
+ * antes de que esto se guardara, y `idempotent: true` cubre un archivo ya
+ * borrado a mano o un doc de seed sin archivo real) — ninguno de los dos
+ * debería frenar el borrado de la fila, que es lo que el usuario pidió.
  */
 export async function eliminarDocumento(doc: Documento): Promise<void> {
+  await deleteExpedienteChunks(doc.ragChunkIds).catch(() => undefined);
   await FileSystem.deleteAsync(doc.ruta, { idempotent: true }).catch(() => undefined);
   await deleteDocumento(doc.id);
 }

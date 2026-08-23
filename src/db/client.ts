@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS documentos (
   tipo TEXT NOT NULL CHECK (tipo IN ('legal', 'memoria', 'plano')),
   nombre TEXT NOT NULL,
   metadata TEXT,
-  rag_status TEXT NOT NULL DEFAULT 'pendiente'
+  rag_status TEXT NOT NULL DEFAULT 'pendiente',
+  rag_chunk_ids TEXT
 );
 
 CREATE TABLE IF NOT EXISTS meta (
@@ -59,6 +60,13 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
     dbPromise = (async () => {
       const db = await SQLite.openDatabaseAsync('obra.db');
       await db.execAsync(SCHEMA);
+      // Migración liviana: `rag_chunk_ids` no existía en versiones previas de
+      // este schema y `CREATE TABLE IF NOT EXISTS` no altera una tabla que ya
+      // existe. SQLite tira "duplicate column name" si ya está —se ignora
+      // justo ese error— y cualquier otro se relanza.
+      await db.execAsync('ALTER TABLE documentos ADD COLUMN rag_chunk_ids TEXT').catch((e: unknown) => {
+        if (!/duplicate column/i.test(e instanceof Error ? e.message : String(e))) throw e;
+      });
       return db;
     })();
   }

@@ -29,6 +29,38 @@ export function toNativePath(uri: string): string {
   return uri.startsWith('file://') ? decodeURIComponent(uri.slice('file://'.length)) : uri;
 }
 
+/** Bajo este umbral de confianza [0,1], un bloque se descarta en vez de sumarse al texto. */
+const MIN_CONFIDENCE = 0.5;
+
+export type OcrBlockLike = { text: string; confidence?: number };
+
+/**
+ * Arma el texto final a partir de los bloques que devolvió el OCR,
+ * descartando los de baja confianza en vez de sumarlos tal cual.
+ *
+ * Separada de `ocrImage` (que llama al SDK) para poder testearla en Node: el
+ * modelo reconoce igual una mancha o un renglón torcido, solo que con
+ * confianza baja, y ese texto se colaba entero al documento indexado —y de
+ * ahí a las respuestas del asistente— sin ninguna señal de que era dudoso.
+ * Un bloque sin `confidence` (el campo es opcional en `OCRTextBlock`) se
+ * conserva, ante la duda. Vale para cualquier pipeline del addon (EasyOCR o
+ * DocTR): `confidence` es parte del contrato del cliente, no de un backend.
+ */
+export function filtrarBloquesConfiables(
+  blocks: OcrBlockLike[],
+  minConfidence: number = MIN_CONFIDENCE
+): { texto: string; descartados: number; total: number } {
+  const confiables = blocks.filter((b) => b.confidence === undefined || b.confidence >= minConfidence);
+  return {
+    texto: confiables
+      .map((b) => b.text)
+      .join('\n')
+      .trim(),
+    descartados: blocks.length - confiables.length,
+    total: blocks.length,
+  };
+}
+
 export async function ocrImage(path: string, onProgress?: ProgressHandler): Promise<string> {
   const nativePath = toNativePath(path);
   // Antes de withOcr: el backend se resuelve en el load() del modelo, así que
@@ -49,17 +81,17 @@ export async function ocrImage(path: string, onProgress?: ProgressHandler): Prom
           `bloques=${result.length}`
       );
 
-      const text = result
-        .map((b) => b.text)
-        .join('\n')
-        .trim();
+      const { texto, descartados, total } = filtrarBloquesConfiables(result);
+      if (descartados > 0) {
+        onProgress?.('ocr', 100, `${descartados} de ${total} bloque(s) descartados por baja confianza`);
+      }
 
       // DIAGNÓSTICO TEMPORAL: cambiar de pipeline cambia el modelo, no solo la
       // velocidad. Sin ver el texto no se puede decir si DocTR salió más
       // rápido a costa de leer peor.
-      console.log(`[ocr] chars=${text.length} texto=${JSON.stringify(text.slice(0, 400))}`);
+      console.log(`[ocr] chars=${texto.length} texto=${JSON.stringify(texto.slice(0, 400))}`);
 
-      return text;
+      return texto;
     }, onProgress);
   } finally {
     unsubscribe();
