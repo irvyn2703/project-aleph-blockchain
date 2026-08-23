@@ -37,6 +37,18 @@ export function pareceToolCallCrudo(texto: string): boolean {
 
 export type ToolCallRescatado = { name: string; args: Record<string, unknown> };
 
+/** Tools cuyo argumento de búsqueda es obligatorio. */
+const TOOLS_CON_QUERY = new Set(['buscar_expediente', 'buscar_concepto']);
+
+export function requiereQuery(name: string): boolean {
+  return TOOLS_CON_QUERY.has(name);
+}
+
+/** ¿El tool-call trae una query usable, o vino vacía? */
+export function tieneQuery(args: Record<string, unknown>): boolean {
+  return typeof args.query === 'string' && args.query.trim().length > 0;
+}
+
 /**
  * Rescata un tool-call del texto crudo del modelo.
  *
@@ -77,6 +89,77 @@ export function rescatarToolCall(texto: string, nombresValidos: string[]): ToolC
     Object.entries(args).filter(([k]) => k !== 'function' && k !== 'type' && k !== 'name')
   );
   return { name, args: limpios };
+}
+
+/**
+ * Extrae los excerpts de un resultado JSON de `buscar_expediente`.
+ *
+ * Devuelve `[]` si el resultado no es del expediente o no trajo hits, así el
+ * llamador distingue "no hay nada que redactar" de "hay texto para el modelo".
+ */
+export function extraerExcerpts(resultadoTool: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(resultadoTool);
+  } catch {
+    return [];
+  }
+  const hits = (parsed as { hits?: unknown }).hits;
+  if (!Array.isArray(hits)) return [];
+  return hits
+    .map((h) => (h as { excerpt?: unknown }).excerpt)
+    .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
+    .map((e) => e.trim());
+}
+
+/**
+ * Prompt de la pasada de redacción.
+ *
+ * El modelo ya eligió bien la tool y el RAG ya trajo el fragmento correcto;
+ * lo único que falta es que alguien lea ese texto y conteste. Se le da el
+ * fragmento y la pregunta, sin tools, para que no vuelva a intentar llamarlas.
+ *
+ * Las instrucciones son deliberadamente cortas y concretas: un modelo de 1B
+ * ignora los prompts largos y vuelve a copiar el texto de entrada.
+ */
+export function promptDeRedaccion(pregunta: string, excerpts: string[]): string {
+  return [
+    'Fragmentos del expediente:',
+    '"""',
+    excerpts.join('\n---\n'),
+    '"""',
+    '',
+    `Pregunta: ${pregunta}`,
+    '',
+    'Respondé la pregunta en UNA o DOS oraciones, usando SOLO los fragmentos.',
+    'No copies el fragmento entero ni lo transcribas. No inventes datos.',
+    'Si el fragmento no contiene la respuesta, decí exactamente: NO_ESTA.',
+  ].join('\n');
+}
+
+/** El modelo declaró que el fragmento no tenía la respuesta. */
+export function esNoEsta(texto: string): boolean {
+  return /\bNO_ESTA\b/i.test(texto.trim());
+}
+
+/**
+ * ¿La "redacción" es en realidad el fragmento copiado?
+ *
+ * El modo de fallo característico de un modelo chico cuando se le pide
+ * resumir: devuelve la entrada casi tal cual. Si pasa, la redacción no sirve
+ * y conviene caer al excerpt crudo, que al menos es fiel.
+ *
+ * Se compara por prefijo normalizado —sin espacios ni saltos— porque el
+ * modelo suele reformatear los saltos de línea del OCR al copiar.
+ */
+export function pareceCopiaDelExcerpt(texto: string, excerpts: string[]): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const t = norm(texto);
+  if (!t) return true;
+  return excerpts.some((e) => {
+    const cabeza = norm(e).slice(0, 120);
+    return cabeza.length >= 40 && t.includes(cabeza);
+  });
 }
 
 /**
