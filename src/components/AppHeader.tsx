@@ -1,15 +1,15 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors, layout } from '../theme';
 
 export function AppHeader() {
   return (
     <View style={styles.border}>
       <View style={styles.row}>
-        <View style={styles.mark}>
-          <Text style={styles.markText}>O</Text>
+        <View style={styles.markWrap}>
+          <Image source={require('../../assets/logo.png')} style={styles.mark} />
         </View>
         <View style={styles.copy}>
-          <Text style={styles.name}>ObraPocket</Text>
+          <Text style={styles.name}>planner</Text>
           <Text style={styles.subtitle}>Expediente local de obra</Text>
         </View>
         <View style={styles.localIcon}>
@@ -35,15 +35,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  mark: {
+  markWrap: {
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: colors.green,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
+    backgroundColor: '#F8F0E4',
   },
-  markText: { color: colors.white, fontSize: 25, lineHeight: 29, fontWeight: '800' },
+  mark: { width: 52, height: 52 },
   copy: { flex: 1, marginLeft: 14 },
   name: { color: colors.text, fontSize: 21, fontWeight: '700' },
   subtitle: { color: colors.muted, fontSize: 13, marginTop: 3, letterSpacing: 0.1 },
