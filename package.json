@@ -13,6 +13,7 @@
   "dependencies": {
     "@qvac/sdk": "^0.17.1",
     "bare-rpc": "^1.3.8",
+    "eas-cli": "^22.2.0",
     "expo": "~54.0.36",
     "expo-build-properties": "~1.0.10",
     "expo-device": "~8.0.10",

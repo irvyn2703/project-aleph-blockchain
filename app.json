@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Asistente de obra",
-    "slug": "project-aleph-blockchain",
+    "slug": "aleph-hackathon",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,9 +28,10 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "CAMERA",
-        "READ_MEDIA_IMAGES",
-        "READ_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -54,6 +55,12 @@
           "cameraPermission": "Fotografiar comprobantes y documentos de la obra."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1773ee97-dbe4-4009-be63-0221167f8da7"
+      }
+    },
+    "owner": "enriquerv"
   }
 }
