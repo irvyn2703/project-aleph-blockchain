@@ -1,10 +1,11 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Platform, StatusBar as RNStatusBar, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { AppHeader } from './src/components/AppHeader';
 import { BottomNav } from './src/components/BottomNav';
 import { getDb } from './src/db/client';
 import { clearDemoDataOnce } from './src/db/seed';
+import { useAppSafeArea } from './src/hooks/useAppSafeArea';
 import { ExpedienteScreen } from './src/screens/ExpedienteScreen';
 import { GastosScreen } from './src/screens/GastosScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -13,6 +14,7 @@ import { colors } from './src/theme';
 import type { ScreenName } from './src/types';
 
 export default function App() {
+  const insets = useAppSafeArea();
   const [screen, setScreen] = useState<ScreenName>('home');
   const [qvacLabel, setQvacLabel] = useState('Inicializando datos…');
   const [tick, setTick] = useState(0);
@@ -35,7 +37,7 @@ export default function App() {
   }, []);
 
   return (
-    <View style={styles.safe}>
+    <View style={[styles.safe, { paddingTop: insets.top }]}>
       <StatusBar style="dark" backgroundColor={colors.bg} />
       <AppHeader />
       <View style={styles.content}>
@@ -55,7 +57,7 @@ export default function App() {
         ) : null}
         {screen === 'expediente' ? <ExpedienteScreen onBack={() => setScreen('home')} /> : null}
       </View>
-      <BottomNav active={screen} onOpen={setScreen} />
+      <BottomNav active={screen} onOpen={setScreen} bottomInset={insets.bottom} />
     </View>
   );
 }
@@ -64,8 +66,6 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.bg,
-    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight ?? 24 : 47,
-    paddingBottom: Platform.OS === 'android' ? 20 : 28,
   },
   content: { flex: 1, minHeight: 0 },
 });

@@ -12,14 +12,16 @@ const items: { screen: ScreenName; label: string; icon: string }[] = [
 export function BottomNav({
   active,
   onOpen,
+  bottomInset,
 }: {
   active: ScreenName;
   onOpen: (screen: ScreenName) => void;
+  bottomInset: number;
 }) {
   const selected = active === 'presupuestos' ? 'home' : active;
 
   return (
-    <View style={styles.border}>
+    <View style={[styles.border, { paddingBottom: bottomInset }]}>
       <View style={styles.row}>
         {items.map((item) => {
           const isActive = selected === item.screen;
