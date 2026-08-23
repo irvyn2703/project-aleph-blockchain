@@ -4,7 +4,7 @@ import {
   unloadModel,
   GTE_LARGE_FP16,
   LLAMA_3_2_1B_INST_Q4_0,
-  OCR_LATIN,
+  OCR_DOCTR,
   VERBOSITY,
   type ModelProgressUpdate,
 } from '@qvac/sdk';
@@ -80,31 +80,32 @@ export async function withOcr<T>(
 ): Promise<T> {
   onProgress?.('ocr', 0, 'Cargando OCR');
   await downloadAsset({
-    assetSrc: OCR_LATIN,
+    assetSrc: OCR_DOCTR,
     onProgress: (p: ModelProgressUpdate) => onProgress?.('ocr', Math.round(p.percentage), 'Descargando ocr'),
   });
   const modelId = await loadModel({
-    modelSrc: OCR_LATIN,
+    // Pipeline DocTR (DBNet + CRNN MobileNetV3) en vez de EasyOCR (CRAFT).
+    // En este device todo corre en CPU —no hay ruta GPU: Vulkan auto-excluye
+    // las Adreno por cómputo incorrecto y OpenCL no registra device en un
+    // 642L—, y ahí CRAFT es el cuello: 18,8 s de los 29,6 s totales. DBNet es
+    // MobileNetV3, convolución depthwise-separable, mucho más barata en CPU,
+    // y el detector baja de 83 MB a 8 MB, lo que además alivia la presión de
+    // memoria que dispara el lowmemorykiller.
+    // El SDK deriva solo el detector y el pipelineType a partir de OCR_DOCTR.
+    modelSrc: OCR_DOCTR,
     modelConfig: {
       // El addon ggml-ocr solo admite 'en' (SUPPORTED_LANGUAGES en
-      // @qvac/ocr-ggml). No limita el español: OCR_LATIN reconoce todo el
-      // alfabeto latino —acentos y ñ incluidos—, y langList elige el juego
-      // de caracteres del reconocedor, no el idioma del texto.
+      // @qvac/ocr-ggml). No limita el español: reconoce todo el alfabeto
+      // latino —acentos y ñ incluidos—, y langList elige el juego de
+      // caracteres del reconocedor, no el idioma del texto.
       langList: ['en'],
-      // CPU a propósito. El backend Vulkan reserva memoria de golpe al
-      // inicializar el driver Adreno y en gama media dispara el
-      // lowmemorykiller, que se lleva puesto el proceso. El reconocedor son
-      // 15 MB: en CPU anda de sobra y no arriesga la app.
+      // CPU explícito: ya está medido que no hay GPU utilizable acá y pedir
+      // un backend inexistente solo agrega un fallback silencioso.
       backendDevice: 'cpu',
-      // Techo del escalado del detector. Sin esto, una foto de cámara
-      // (12 MPx) se amplía hasta pedir ~4,8 GB de una sola vez: medido en
-      // device, el proceso muere y arrastra a los servicios del sistema.
-      // 1280 px alcanza de sobra para leer un comprobante.
-      canvasSize: 1280,
-      magRatio: 1,
-      // Una línea de texto por lote: el reconocedor procesa recortes
-      // pequeños y agruparlos multiplica el pico de memoria sin ganar mucho.
-      recognizerBatchSize: 1,
+      // Ojo: canvasSize, magRatio y recognizerBatchSize son knobs de EasyOCR
+      // y el addon los ignora en DocTR, así que no se pasan. El techo de
+      // memoria que resolvían lo da acá el propio DBNet, que escala la
+      // imagen a una resolución fija y acotada.
     },
     onProgress: (p: ModelProgressUpdate) => onProgress?.('ocr', Math.round(p.percentage), 'Cargando OCR'),
   });
