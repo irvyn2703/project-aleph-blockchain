@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,11 +23,13 @@ export function HomeScreen({
   qvacLabel,
   onOpen,
   refreshToken,
+  keyboardHeight = 0,
 }: {
   mode: 'home' | 'assistant';
   qvacLabel: string;
   onOpen: (s: ScreenName) => void;
   refreshToken: number;
+  keyboardHeight?: number;
 }) {
   const [obra, setObra] = useState('Obra');
   const [input, setInput] = useState('');
@@ -165,11 +165,7 @@ export function HomeScreen({
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
-    >
+    <View style={[styles.root, { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 56 : 0 }]}>
       <View style={styles.assistantIntro}>
         <Text style={styles.kicker}>ASISTENTE PRIVADO</Text>
         <Text style={styles.pageTitle}>Pregunta a tu obra</Text>
@@ -216,7 +212,7 @@ export function HomeScreen({
           </Pressable>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
