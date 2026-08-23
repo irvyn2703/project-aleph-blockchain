@@ -1,42 +1,50 @@
-# Construction Site Assistant (QVAC)
+# planner
 
-Expo / React Native app for tracking a construction site with **local** AI (QVAC): budget in SQLite, document expediente with RAG, expense tracking with OCR-confirmed receipts, chat on Home.
+Expo / React Native app for a construction site: local SQLite budget, expediente with RAG, expenses with OCR-confirmed receipts, and an on-device assistant.
 
-Data never leaves the phone. QVAC doesn't run in an emulator or Expo Go: it needs a **physical Android device**.
+Data never leaves the phone. QVAC (`@qvac/sdk` [`^0.17.1`](package.json)) runs inside a native Bare worker — it needs a **physical Android device**, not an emulator or Expo Go.
 
-## What was built with QVAC
+## Screens
 
-QVAC (`@qvac/sdk` [`^0.17.1`](package.json#L14)) runs 100% on-device inside a native Bare worker (`bare-rpc` + `react-native-bare-kit`), with no backend. Three capabilities are used:
+| Tab | What it does |
+|---|---|
+| Inicio | Site overview and entry to Presupuestos |
+| Expediente | Upload contracts, calculation memos, photos; OCR + RAG ingest; document preview |
+| Capturar | Log expenses (Excel import or camera/gallery OCR) |
+| Asistente | Chat: Llama 3.2 1B with tools over SQLite/RAG, SQL fallback for exact amounts |
 
-| Feature | QVAC model | Purpose |
+## What runs on QVAC
+
+QVAC runs 100% on-device (`bare-rpc` + `react-native-bare-kit`), with no backend. The Expo plugin wires the worker (`"@qvac/sdk/expo-plugin"` in [`app.json`](app.json)).
+
+| Feature | Model | Purpose |
 |---|---|---|
-| Chat / tool-calling | `LLAMA_3_2_1B_INST_Q4_0` | Answer questions about the site using tools over SQLite (never invents amounts) |
-| Expediente RAG | `GTE_LARGE_FP16` (embeddings) | Index and search the contract/calculation memo uploaded by the user |
-| Receipt OCR | `OCR_LATIN` | Read the amount and description off a receipt photo |
+| Chat / tool-calling | `LLAMA_3_2_1B_INST_Q4_0` | Answer site questions via tools over SQLite and the expediente. Never invents amounts. |
+| Expediente RAG | `GTE_LARGE_FP16` | Index and search uploaded contracts / memos |
+| Receipt & document OCR | `OCR_DOCTR` (DocTR: DBNet + CRNN MobileNetV3) | Read amount/description from a receipt, or text from expediente photos |
 
-> **Current build status:** [`src/qvac/sdk.ts`](src/qvac/sdk.ts) makes `getQvac()` always throw — the Bare worker aborts (`bare-performance` addon, see [`qvac/addons.manifest.json`](qvac/addons.manifest.json)) on this APK. Because of that, none of the three features run at runtime today: chat answers via a deterministic SQLite fallback instead ([`src/qvac/chat.ts#L17-L76`](src/qvac/chat.ts#L17-L76)). The rest of this section describes the integration as it's *wired in the code*, for when the worker gets unblocked.
-
-## Where inference happens (code)
+### Where inference happens
 
 - **Model loading** — [`src/qvac/models.ts`](src/qvac/models.ts)
-  - LLM: `downloadAsset` + `loadModel` for `LLAMA_3_2_1B_INST_Q4_0` → [`models.ts#L15-L37`](src/qvac/models.ts#L15-L37)
-  - Embeddings: `GTE_LARGE_FP16` → [`models.ts#L39-L53`](src/qvac/models.ts#L39-L53)
-  - OCR: `OCR_LATIN`, loaded and unloaded per use → [`models.ts#L55-L73`](src/qvac/models.ts#L55-L73)
-- **Actual OCR inference** (`sdk.ocr(...)`) → [`src/qvac/ocr.ts#L4-L14`](src/qvac/ocr.ts#L4-L14)
-- **Embedding inference** (`sdk.ragIngest` / `sdk.ragSearch`) → [`src/qvac/rag.ts#L7-L28`](src/qvac/rag.ts#L7-L28)
-- **LLM tool-calling contract** (system prompt + tool schema + execution) → [`src/qvac/tools.ts`](src/qvac/tools.ts)
-- **Chat turn** (deterministic today; the LLM's hookup point) → [`src/qvac/chat.ts#L78-L86`](src/qvac/chat.ts#L78-L86)
-- **Expo native plugin that wires up the SDK** → [`app.json#L48`](app.json#L48) (`"@qvac/sdk/expo-plugin"`)
+  - LLM: `downloadAsset` + `loadModel` for `LLAMA_3_2_1B_INST_Q4_0`
+  - Embeddings: `GTE_LARGE_FP16`
+  - OCR: `OCR_DOCTR`, loaded and unloaded per use (`withOcr`)
+- **LLM turn** (`completion` + tools, streamed) — [`src/qvac/chat.ts`](src/qvac/chat.ts)
+- **Tool contract** (system prompt + schema + SQLite/RAG execution) — [`src/qvac/tools.ts`](src/qvac/tools.ts)
+- **Routing / rescue** (numeric SQL short-circuit, raw tool-call parse, invented-amount check) — [`src/qvac/routing.ts`](src/qvac/routing.ts)
+- **OCR** (`sdk.ocr`) — [`src/qvac/ocr.ts`](src/qvac/ocr.ts)
+- **RAG** (chunk → embed → `ragSaveEmbeddings` / `ragSearch`) — [`src/qvac/rag.ts`](src/qvac/rag.ts)
+- **Worker shutdown** — [`src/qvac/sdk.ts`](src/qvac/sdk.ts)
 
-Honest note: there is no LLM text-generation call wired up yet (only model loading). The inference that does run in the code is OCR and embeddings (RAG); real LLM chat is pending until `getQvac()` stops throwing.
+Exact totals and spent-vs-budget questions go straight to SQLite ([`esConsultaNumericaDirecta`](src/qvac/routing.ts)). If the LLM is still downloading, out of memory, or the worker fails, chat falls back to the same deterministic SQLite answers.
 
-## Model, quantization, and where it runs
+### Model, quantization, and where it runs
 
-- **LLM**: Llama 3.2 1B Instruct, **Q4_0** quantization (`LLAMA_3_2_1B_INST_Q4_0`).
-- **Embeddings**: GTE-Large, **FP16** (`GTE_LARGE_FP16`).
-- **OCR**: `OCR_LATIN` model (Latin-script text).
-- **Where it runs**: on-device, on the phone's GPU (`device: 'gpu'`, `ctx_size: 2048` in [`models.ts#L27-L31`](src/qvac/models.ts#L27-L31)), inside the Bare worker — **no** cloud calls.
-- **Approximate latency**: _pending — will be added in a future update._
+- **LLM**: Llama 3.2 1B Instruct, **Q4_0** (`LLAMA_3_2_1B_INST_Q4_0`), `ctx_size: 2048`, tools on.
+- **Embeddings**: GTE-Large, **FP16** (`GTE_LARGE_FP16`). Stable RAG id: `gte-large-fp16` (not the per-session `loadModel` handle).
+- **OCR**: DocTR pipeline (`OCR_DOCTR`), `langList: ['en']` (Latin alphabet, including Spanish accents/ñ).
+- **Where it runs**: on-device **CPU** (`device: 'cpu'`, `gpu_layers: 0`). GPU upload of these models exhausted memory on the target device and got the process killed. Vulkan is excluded for Adreno (`libqvac-ggml-vulkan.so` in [`app.json`](app.json)).
+- **Latency**: first launch downloads the models. OCR and LLM are on-device after that; numbers depend on the phone.
 
 ## Setup
 
@@ -46,21 +54,43 @@ npx expo prebuild
 npx expo run:android --device
 ```
 
-- Requires a **physical Android device** connected (QVAC doesn't run in an emulator or Expo Go).
-- Windows: the native Android prebuild requires JDK + Android SDK.
-- First launch downloads the models (LLM, embeddings, OCR) to the device.
-- `npm run typecheck` runs `tsc --noEmit` for type checking.
+Or `npm run android` after a prebuild. EAS preview APK: `eas.json` → `preview` (`android.buildType: apk`).
+
+- Requires a **physical Android device** (minSdk 29).
+- Windows: native prebuild needs JDK + Android SDK.
+- First launch downloads LLM, embeddings, and OCR to the device.
+- `npm run verify` runs typecheck + lint + tests.
+
+| Script | What |
+|---|---|
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` / `lint:fix` | ESLint |
+| `npm run test` | Vitest (parse, classify, routing, OCR helpers) |
+| `npm run format` | Prettier |
+
+The `/qvac` worker bundle is generated by prebuild and is gitignored (it embeds absolute machine paths).
 
 ## Excel
 
-One sheet with columns:
+Import lives in Presupuestos (budget) and Capturar (expenses). Header row can sit below metadata; aliases accept public-works headings (`cantidad_o_volumen`, `precios_costo_directo`, …). Amounts use es-AR (`1.234,56`). Importe is always recalculated as cantidad × PU.
+
+**Budget — flat template** (one row per concepto):
 
 `clave_partida, nombre_partida, clave_concepto, descripcion, um, cantidad, pu, importe`
 
+**Budget — hierarchical official sheet**: partida rows (name + subtotal, no cantidad/PU) followed by their conceptos. Detected automatically when `clave_partida` is missing.
+
+**Expenses:**
+
+`clave_partida, monto, descripcion, fecha` (fecha `AAAA-MM-DD`; today if missing)
+
+Importing a budget replaces the previous one and deletes existing expenses. Expense rows whose `clave_partida` does not exist are skipped.
+
 ## Demo
 
-1. "What's the total budget for the site and for the cimentación item?"
-2. "What does the contract say about deadlines and penalties?"
-3. Log an expense → "How much have we spent vs. budget on CIM-01?"
+1. Import a budget Excel in Presupuestos.
+2. "¿Cuál es el total de la obra y de la partida de cimentación?"
+3. Upload the contract in Expediente → "¿Qué dice el contrato sobre plazos y multas?"
+4. Log an expense (Excel or photo) → "¿Cuánto llevamos gastado vs presupuesto en CIM-01?"
 
-If QVAC hasn't loaded yet, chat still answers those numeric and legal demo questions from SQLite.
+Numeric questions answer from SQLite even before the LLM finishes loading.
