@@ -84,6 +84,15 @@ export async function withOcr<T>(
       // lowmemorykiller, que se lleva puesto el proceso. El reconocedor son
       // 15 MB: en CPU anda de sobra y no arriesga la app.
       backendDevice: 'cpu',
+      // Techo del escalado del detector. Sin esto, una foto de cámara
+      // (12 MPx) se amplía hasta pedir ~4,8 GB de una sola vez: medido en
+      // device, el proceso muere y arrastra a los servicios del sistema.
+      // 1280 px alcanza de sobra para leer un comprobante.
+      canvasSize: 1280,
+      magRatio: 1,
+      // Una línea de texto por lote: el reconocedor procesa recortes
+      // pequeños y agruparlos multiplica el pico de memoria sin ganar mucho.
+      recognizerBatchSize: 1,
     },
     onProgress: (p: ModelProgressUpdate) => onProgress?.('ocr', Math.round(p.percentage), 'Cargando OCR'),
   });
