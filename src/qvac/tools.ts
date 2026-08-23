@@ -1,3 +1,4 @@
+import type { Tool } from '@qvac/sdk';
 import {
   buscarConceptos,
   findPartida,
@@ -6,20 +7,6 @@ import {
   totalObra,
 } from '../db/queries';
 import { searchExpediente } from './rag';
-
-export type ObraTool = {
-  type: 'function';
-  name: string;
-  description: string;
-  parameters: {
-    type: 'object';
-    properties: Record<
-      string,
-      { type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'integer'; description?: string }
-    >;
-    required?: string[];
-  };
-};
 
 export const SYSTEM_PROMPT = `Sos el asistente local de ESTA obra. Hablás en español rioplatense, breve y preciso.
 
@@ -34,7 +21,7 @@ function money(n: number): string {
   return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 });
 }
 
-export const obraTools: ObraTool[] = [
+export const obraTools: Tool[] = [
   {
     type: 'function',
     name: 'total_obra',

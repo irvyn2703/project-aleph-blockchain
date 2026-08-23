@@ -1,13 +1,12 @@
+import { ragIngest, ragSearch } from '@qvac/sdk';
 import { listDocumentos, updateDocumentoRag } from '../db/queries';
 import { ensureEmbeddings, type ProgressHandler } from './models';
-import { getQvac } from './sdk';
 
 export const RAG_WORKSPACE = 'obra-expediente';
 
 export async function ingestExpedienteText(id: string, text: string, onProgress?: ProgressHandler): Promise<void> {
-  const sdk = await getQvac();
   const modelId = await ensureEmbeddings(onProgress);
-  await sdk.ragIngest({
+  await ragIngest({
     modelId,
     workspace: RAG_WORKSPACE,
     documents: [`[${id}]\n${text}`],
@@ -16,9 +15,8 @@ export async function ingestExpedienteText(id: string, text: string, onProgress?
 }
 
 export async function searchExpediente(query: string, topK = 4): Promise<{ content: string; score: number }[]> {
-  const sdk = await getQvac();
   const modelId = await ensureEmbeddings();
-  const results = await sdk.ragSearch({
+  const results = await ragSearch({
     modelId,
     workspace: RAG_WORKSPACE,
     query,
