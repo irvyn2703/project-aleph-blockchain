@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { headerAlias, normHeader, num, parseGastosRows, parsePresupuestoRows } from './parse';
+import {
+  findHeaderRowIndex,
+  headerAlias,
+  normHeader,
+  num,
+  parseGastosRows,
+  parsePresupuestoRows,
+} from './parse';
 
 describe('normHeader', () => {
   it('saca acentos, baja a minúsculas y une palabras con guion bajo', () => {
@@ -14,6 +21,13 @@ describe('normHeader', () => {
     expect(normHeader(undefined)).toBe('');
     expect(normHeader(42)).toBe('42');
   });
+
+  it('saca símbolos de moneda y puntuación de encabezados oficiales, sin dejar guiones sueltos', () => {
+    expect(normHeader('Importe \n$')).toBe('importe');
+    expect(normHeader('Precios Costo Directo\n$')).toBe('precios_costo_directo');
+    expect(normHeader('Clave          ó              No.')).toBe('clave_o_no');
+    expect(normHeader('Cantidad           ó          Volumen')).toBe('cantidad_o_volumen');
+  });
 });
 
 describe('headerAlias', () => {
@@ -27,6 +41,37 @@ describe('headerAlias', () => {
 
   it('deja pasar sin cambios lo que no conoce', () => {
     expect(headerAlias('columna_rara')).toBe('columna_rara');
+  });
+
+  it('mapea los encabezados del presupuesto de obra pública oficial (formato jerárquico)', () => {
+    expect(headerAlias('clave_o_no')).toBe('clave_concepto');
+    expect(headerAlias('conceptos_de_trabajo')).toBe('descripcion');
+    expect(headerAlias('unidad_de_medida')).toBe('um');
+    expect(headerAlias('cantidad_o_volumen')).toBe('cantidad');
+    expect(headerAlias('precios_costo_directo')).toBe('pu');
+  });
+});
+
+describe('findHeaderRowIndex', () => {
+  it('salta las filas de metadata y ubica el encabezado real', () => {
+    const rows = [
+      ['** PRESUPUESTO BASE**', '', '', '', '', ''],
+      ['Nombre del Proyecto:', 'Rehabilitación de tanque', '', '', '', ''],
+      ['Municipio:', 'Zongozotla', '', '', '', ''],
+      ['', '', '', '', '', ''],
+      ['Clave ó No.', 'Conceptos de Trabajo', 'Unidad de Medida', 'Cantidad ó Volumen', 'Precios Costo Directo\n$', 'Importe \n$'],
+      ['I', 'PRELIMINARES', '', '', '', 103931.63],
+    ];
+    expect(findHeaderRowIndex(rows)).toBe(4);
+  });
+
+  it('devuelve 0 cuando el encabezado ya está en la primera fila', () => {
+    const rows = [['clave_partida', 'nombre_partida', 'clave_concepto', 'descripcion', 'um', 'cantidad', 'pu', 'importe']];
+    expect(findHeaderRowIndex(rows)).toBe(0);
+  });
+
+  it('devuelve 0 como respaldo si ninguna fila tiene pinta de encabezado', () => {
+    expect(findHeaderRowIndex([['a', 'b'], ['c', 'd']])).toBe(0);
   });
 });
 
@@ -129,6 +174,99 @@ describe('parsePresupuestoRows', () => {
 
   it('falla si ninguna fila es aprovechable', () => {
     expect(() => parsePresupuestoRows([{ columna: 'irrelevante' }])).toThrow('No se leyeron partidas');
+  });
+});
+
+describe('parsePresupuestoRows (formato jerárquico de obra pública)', () => {
+  // Encabezados tal cual salen de un presupuesto oficial real (sin
+  // clave_partida/nombre_partida: la partida es una fila propia, no una
+  // columna repetida por concepto).
+  const HEADERS = {
+    clave: 'Clave ó No.',
+    descripcion: 'Conceptos de Trabajo',
+    um: 'Unidad de Medida',
+    cantidad: 'Cantidad ó Volumen',
+    pu: 'Precios Costo Directo\n$',
+    importe: 'Importe \n$',
+  };
+
+  function fila(clave: string, descripcion: string, um: string, cantidad: number | '', pu: number | '', importe: number) {
+    return {
+      [HEADERS.clave]: clave,
+      [HEADERS.descripcion]: descripcion,
+      [HEADERS.um]: um,
+      [HEADERS.cantidad]: cantidad,
+      [HEADERS.pu]: pu,
+      [HEADERS.importe]: importe,
+    };
+  }
+
+  it('arma partidas a partir de las filas de sección (nombre + subtotal, sin cantidad/PU)', () => {
+    const r = parsePresupuestoRows([
+      fila('I', 'PRELIMINARES', '', '', '', 63996.24),
+      fila('1000 06', 'Ruptura y demolición a mano', 'M3', 184.8, 346.3, 63996.24),
+      fila('', 'OBRA DE DERIVACION', '', '', '', 796.3),
+      fila('2282 077', 'Reducción campana galvanizada', 'PZA', 2, 398.15, 796.3),
+    ]);
+    expect(r.partidas).toHaveLength(2);
+    expect(r.partidas[0]).toMatchObject({ clave: 'I', nombre: 'PRELIMINARES' });
+    expect(r.partidas[0]!.conceptos).toHaveLength(1);
+    expect(r.partidas[1]!.conceptos).toHaveLength(1);
+  });
+
+  it('sintetiza una clave (P1, P2…) para las partidas que no traen una propia', () => {
+    const r = parsePresupuestoRows([
+      fila('', 'OBRA DE DERIVACION', '', '', '', 796.3),
+      fila('2282 077', 'Reducción campana galvanizada', 'PZA', 2, 398.15, 796.3),
+    ]);
+    expect(r.partidas[0]!.clave).toBe('P1');
+  });
+
+  it('permite claves de concepto repetidas dentro de una misma partida', () => {
+    const r = parsePresupuestoRows([
+      fila('I', 'PRELIMINARES', '', '', '', 200),
+      fila('4090 02', 'Varilla 3/8"', 'KG', 10, 10, 100),
+      fila('4090 02', 'Varilla 1/2"', 'KG', 10, 10, 100),
+    ]);
+    expect(r.partidas[0]!.conceptos).toHaveLength(2);
+    expect(r.partidas[0]!.conceptos.map((c) => c.clave)).toEqual(['4090 02', '4090 02']);
+  });
+
+  it('ignora el bloque de totales final (su etiqueta cae en la columna de PU, no en la de descripción)', () => {
+    const r = parsePresupuestoRows([
+      fila('I', 'PRELIMINARES', '', '', '', 1000),
+      fila('1000 06', 'Concepto', 'M3', 10, 100, 1000),
+      { [HEADERS.clave]: '', [HEADERS.descripcion]: '', [HEADERS.um]: '', [HEADERS.cantidad]: '', [HEADERS.pu]: 'TOTAL COSTO DIRECTO', [HEADERS.importe]: 1000 },
+      { [HEADERS.clave]: '', [HEADERS.descripcion]: '', [HEADERS.um]: '', [HEADERS.cantidad]: 0.1, [HEADERS.pu]: 'INDIRECTOS', [HEADERS.importe]: 100 },
+    ]);
+    expect(r.partidas).toHaveLength(1);
+    expect(r.partidas[0]!.conceptos).toHaveLength(1);
+  });
+
+  it('avisa y usa cantidad × PU cuando el importe del Excel no coincide', () => {
+    const r = parsePresupuestoRows([
+      fila('I', 'PRELIMINARES', '', '', '', 999999),
+      fila('1000 06', 'Concepto', 'M3', 10, 100, 999999),
+    ]);
+    expect(r.partidas[0]!.conceptos[0]!.importe).toBe(1000);
+    expect(r.warnings.join(' ')).toContain('1000 06');
+  });
+
+  it('omite conceptos que aparecen antes de cualquier fila de partida', () => {
+    const r = parsePresupuestoRows([
+      fila('1000 06', 'Concepto huérfano', 'M3', 10, 100, 1000),
+      fila('I', 'PRELIMINARES', '', '', '', 1000),
+      fila('1000 07', 'Concepto normal', 'M3', 10, 100, 1000),
+    ]);
+    expect(r.partidas).toHaveLength(1);
+    expect(r.partidas[0]!.conceptos).toHaveLength(1);
+    expect(r.warnings.join(' ')).toContain('omitieron');
+  });
+
+  it('falla si no se arma ninguna partida', () => {
+    expect(() =>
+      parsePresupuestoRows([{ [HEADERS.clave]: '', [HEADERS.descripcion]: '', [HEADERS.um]: '', [HEADERS.cantidad]: '', [HEADERS.pu]: '', [HEADERS.importe]: '' }])
+    ).toThrow('No se leyeron partidas');
   });
 });
 
