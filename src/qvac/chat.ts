@@ -2,6 +2,7 @@ import { completion } from '@qvac/sdk';
 import { findPartida, gastadoVsPresupuesto, getObraNombre, listDocumentosTexto, listPartidas, totalObra } from '../db/queries';
 import type { RespuestaFuente } from '../types';
 import { ensureLlm, type ProgressHandler } from './models';
+import { searchExpediente } from './rag';
 import {
   detectarImportesInventados,
   esConsultaNumericaDirecta,
@@ -87,6 +88,30 @@ export async function tryDeterministicAnswer(userText: string): Promise<string |
     if (!docs.length) {
       return 'No hay documentos en el expediente. Cargalos en Expediente. No invento cláusulas.';
     }
+
+    // Búsqueda semántica primero: este es el respaldo que se usa cuando el
+    // LLM no está disponible (ver runChatTurn/runLlmTurn), así que conviene
+    // que sea tan bueno como se pueda sin él. Buscar por embeddings es más
+    // preciso que la regex de palabra clave de abajo, que puede fallar si el
+    // OCR metió un salto de línea justo donde cae la ventana fija, o si la
+    // cláusula sigue después del corte.
+    try {
+      const hits = await searchExpediente(userText);
+      if (hits.length) {
+        const fuente = asksContrato ? 'documentos legales' : 'memoria de cálculo';
+        return (
+          hits
+            .slice(0, 3)
+            .map((h) => h.content.trim())
+            .join('\n\n---\n\n') + `\n\nFuente: expediente (${fuente}, búsqueda semántica).`
+        );
+      }
+    } catch {
+      // Índice RAG no disponible todavía (embeddings sin cargar, workspace
+      // vacío): se sigue con la búsqueda por palabra clave en vez de dejar
+      // al usuario sin respuesta.
+    }
+
     const pool = docs.map((d) => `## ${d.nombre}\n${d.texto}`).join('\n\n');
     if (asksContrato) {
       const plazo = pool.match(/plazo[\s\S]{0,200}/i)?.[0];

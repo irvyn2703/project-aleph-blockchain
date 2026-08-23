@@ -300,6 +300,17 @@ export async function insertGasto(input: {
   return result.lastInsertRowId;
 }
 
+/** `rag_chunk_ids` se guarda como JSON; nulo/corrupto se lee como sin chunks. */
+function parseRagChunkIds(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function listDocumentos(): Promise<Documento[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{
@@ -310,6 +321,7 @@ export async function listDocumentos(): Promise<Documento[]> {
     nombre: string;
     metadata: string | null;
     rag_status: Documento['ragStatus'];
+    rag_chunk_ids: string | null;
   }>('SELECT * FROM documentos ORDER BY fecha_subida DESC, id DESC');
   return rows.map((d) => ({
     id: d.id,
@@ -319,6 +331,7 @@ export async function listDocumentos(): Promise<Documento[]> {
     nombre: d.nombre,
     metadata: d.metadata,
     ragStatus: d.rag_status,
+    ragChunkIds: parseRagChunkIds(d.rag_chunk_ids),
   }));
 }
 
@@ -343,12 +356,29 @@ export async function insertDocumento(input: {
   return result.lastInsertRowId;
 }
 
-export async function updateDocumentoRag(id: number, ragStatus: Documento['ragStatus'], metadata?: string): Promise<void> {
+export async function updateDocumentoRag(
+  id: number,
+  ragStatus: Documento['ragStatus'],
+  metadata?: string,
+  ragChunkIds?: string[]
+): Promise<void> {
   const db = await getDb();
+  const chunkIdsJson = ragChunkIds ? JSON.stringify(ragChunkIds) : null;
   if (metadata != null) {
-    await db.runAsync('UPDATE documentos SET rag_status = ?, metadata = ? WHERE id = ?', ragStatus, metadata, id);
+    await db.runAsync(
+      'UPDATE documentos SET rag_status = ?, metadata = ?, rag_chunk_ids = COALESCE(?, rag_chunk_ids) WHERE id = ?',
+      ragStatus,
+      metadata,
+      chunkIdsJson,
+      id
+    );
   } else {
-    await db.runAsync('UPDATE documentos SET rag_status = ? WHERE id = ?', ragStatus, id);
+    await db.runAsync(
+      'UPDATE documentos SET rag_status = ?, rag_chunk_ids = COALESCE(?, rag_chunk_ids) WHERE id = ?',
+      ragStatus,
+      chunkIdsJson,
+      id
+    );
   }
 }
 

@@ -102,10 +102,11 @@ export async function withOcr<T>(
       // CPU explícito: ya está medido que no hay GPU utilizable acá y pedir
       // un backend inexistente solo agrega un fallback silencioso.
       backendDevice: 'cpu',
-      // Ojo: canvasSize, magRatio y recognizerBatchSize son knobs de EasyOCR
-      // y el addon los ignora en DocTR, así que no se pasan. El techo de
-      // memoria que resolvían lo da acá el propio DBNet, que escala la
-      // imagen a una resolución fija y acotada.
+      // Ojo: canvasSize, magRatio, recognizerBatchSize y contrastRetry son
+      // knobs de EasyOCR y el addon los ignora en DocTR, así que no se pasan
+      // (ver OcrGgmlParams: los cuatro están marcados "easyocr only"). El
+      // techo de memoria que resolvía canvasSize lo da acá el propio DBNet,
+      // que escala la imagen a una resolución fija y acotada.
     },
     onProgress: (p: ModelProgressUpdate) => onProgress?.('ocr', Math.round(p.percentage), 'Cargando OCR'),
   });

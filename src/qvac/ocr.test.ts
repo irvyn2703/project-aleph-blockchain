@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseComprobante, toNativePath } from './ocr';
+import { filtrarBloquesConfiables, parseComprobante, toNativePath } from './ocr';
 
 describe('toNativePath', () => {
   it('quita el esquema file:// que devuelven las APIs de Expo', () => {
@@ -14,6 +14,40 @@ describe('toNativePath', () => {
 
   it('decodifica los caracteres escapados de la URI', () => {
     expect(toNativePath('file:///data/mi%20carpeta/foto.png')).toBe('/data/mi carpeta/foto.png');
+  });
+});
+
+describe('filtrarBloquesConfiables', () => {
+  it('descarta los bloques por debajo del umbral de confianza', () => {
+    const r = filtrarBloquesConfiables([
+      { text: 'Contrato de obra', confidence: 0.9 },
+      { text: 'xzq##%%', confidence: 0.2 },
+      { text: 'Plazo: 90 días', confidence: 0.8 },
+    ]);
+    expect(r.texto).toBe('Contrato de obra\nPlazo: 90 días');
+    expect(r.descartados).toBe(1);
+    expect(r.total).toBe(3);
+  });
+
+  it('conserva un bloque sin confianza informada, ante la duda', () => {
+    const r = filtrarBloquesConfiables([{ text: 'Sin score' }]);
+    expect(r.texto).toBe('Sin score');
+    expect(r.descartados).toBe(0);
+  });
+
+  it('acepta un umbral custom', () => {
+    const r = filtrarBloquesConfiables([{ text: 'Justo en el límite', confidence: 0.6 }], 0.7);
+    expect(r.texto).toBe('');
+    expect(r.descartados).toBe(1);
+  });
+
+  it('no cuenta bloques descartados cuando todos pasan el umbral', () => {
+    const r = filtrarBloquesConfiables([
+      { text: 'A', confidence: 1 },
+      { text: 'B', confidence: 0.5 },
+    ]);
+    expect(r.descartados).toBe(0);
+    expect(r.texto).toBe('A\nB');
   });
 });
 

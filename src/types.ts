@@ -42,6 +42,8 @@ export type Documento = {
   nombre: string;
   metadata: string | null;
   ragStatus: 'pendiente' | 'listo' | 'error';
+  /** Ids de los chunks de este documento en el índice RAG, para poder borrarlos. */
+  ragChunkIds: string[];
 };
 
 export type ChatRole = 'user' | 'assistant' | 'system';
