@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { parseComprobante } from './ocr';
+import { parseComprobante, toNativePath } from './ocr';
+
+describe('toNativePath', () => {
+  it('quita el esquema file:// que devuelven las APIs de Expo', () => {
+    expect(toNativePath('file:///data/user/0/com.aleph.obra/files/expediente/foto.png')).toBe(
+      '/data/user/0/com.aleph.obra/files/expediente/foto.png'
+    );
+  });
+
+  it('deja intactas las rutas que ya son nativas', () => {
+    expect(toNativePath('/data/user/0/app/files/foto.png')).toBe('/data/user/0/app/files/foto.png');
+  });
+
+  it('decodifica los caracteres escapados de la URI', () => {
+    expect(toNativePath('file:///data/mi%20carpeta/foto.png')).toBe('/data/mi carpeta/foto.png');
+  });
+});
 
 /**
  * `parseComprobante` solo interpreta el texto que devolvió el OCR: no llama al modelo, así que corre en Node. La inferencia en sí se verifica en device.

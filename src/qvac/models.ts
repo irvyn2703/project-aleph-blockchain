@@ -73,6 +73,18 @@ export async function withOcr<T>(
   });
   const modelId = await loadModel({
     modelSrc: OCR_LATIN,
+    modelConfig: {
+      // El addon ggml-ocr solo admite 'en' (SUPPORTED_LANGUAGES en
+      // @qvac/ocr-ggml). No limita el español: OCR_LATIN reconoce todo el
+      // alfabeto latino —acentos y ñ incluidos—, y langList elige el juego
+      // de caracteres del reconocedor, no el idioma del texto.
+      langList: ['en'],
+      // CPU a propósito. El backend Vulkan reserva memoria de golpe al
+      // inicializar el driver Adreno y en gama media dispara el
+      // lowmemorykiller, que se lleva puesto el proceso. El reconocedor son
+      // 15 MB: en CPU anda de sobra y no arriesga la app.
+      backendDevice: 'cpu',
+    },
     onProgress: (p: ModelProgressUpdate) => onProgress?.('ocr', Math.round(p.percentage), 'Cargando OCR'),
   });
   loaded.ocr = modelId;

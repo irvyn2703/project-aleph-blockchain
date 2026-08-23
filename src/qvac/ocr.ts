@@ -1,9 +1,19 @@
 import { ocr } from '@qvac/sdk';
 import { withOcr, type ProgressHandler } from './models';
 
+/**
+ * El OCR corre en el worker Bare, que lee del filesystem con rutas nativas y
+ * no entiende el esquema `file://` que devuelven las APIs de Expo. El propio
+ * SDK hace este mismo destripado al pasarle HOME_DIR al worklet.
+ */
+export function toNativePath(uri: string): string {
+  return uri.startsWith('file://') ? decodeURIComponent(uri.slice('file://'.length)) : uri;
+}
+
 export async function ocrImage(path: string, onProgress?: ProgressHandler): Promise<string> {
+  const nativePath = toNativePath(path);
   return withOcr(async (modelId) => {
-    const { blocks } = ocr({ modelId, image: path });
+    const { blocks } = ocr({ modelId, image: nativePath });
     const result = await blocks;
     return result
       .map((b) => b.text)

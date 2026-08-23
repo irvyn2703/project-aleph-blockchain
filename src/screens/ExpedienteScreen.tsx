@@ -9,6 +9,8 @@ import { ocrImage } from '../qvac/ocr';
 import { colors, layout, radius } from '../theme';
 import type { Documento, DocumentoTipo } from '../types';
 
+type Origen = 'archivo' | 'camara' | 'galeria';
+
 export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
   const [docs, setDocs] = useState<Documento[]>([]);
   const [tipo, setTipo] = useState<DocumentoTipo>('legal');
@@ -23,20 +25,30 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
     void reload();
   }, []);
 
-  async function addFile(fromCamera: boolean) {
+  async function addFile(origen: Origen) {
     setBusy(true);
     setMsg(null);
     try {
       let uri: string | undefined;
       let name = 'documento';
-      if (fromCamera) {
-        const img = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+      let mimeType: string | undefined;
+
+      if (origen === 'camara' || origen === 'galeria') {
+        // Las fotos se eligen con expo-image-picker, no con el picker de
+        // documentos: en Android ese abre la vista de Documentos, que no
+        // lista la galería.
+        const img =
+          origen === 'camara'
+            ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
+            : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
         if (img.canceled || !img.assets[0]) {
           setBusy(false);
           return;
         }
-        uri = img.assets[0].uri;
-        name = `foto-${Date.now()}.jpg`;
+        const asset = img.assets[0];
+        uri = asset.uri;
+        name = asset.fileName ?? `foto-${Date.now()}.jpg`;
+        mimeType = asset.mimeType ?? 'image/jpeg';
       } else {
         const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
         if (picked.canceled || !picked.assets[0]) {
@@ -45,11 +57,13 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
         }
         uri = picked.assets[0].uri;
         name = picked.assets[0].name;
+        mimeType = picked.assets[0].mimeType;
       }
       const result = await ingestDocumento({
         uri,
         name,
         tipo,
+        mimeType,
         ocrImage: async (path) => ocrImage(path, (_, __, label) => setMsg(label)),
       });
       await reload();
@@ -81,11 +95,14 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
         ))}
       </View>
       <View style={styles.actions}>
-        <Pressable style={styles.primary} onPress={() => addFile(false)} disabled={busy}>
+        <Pressable style={styles.primary} onPress={() => addFile('archivo')} disabled={busy}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Archivo</Text>}
         </Pressable>
-        <Pressable style={styles.secondary} onPress={() => addFile(true)} disabled={busy}>
-          <Text style={styles.secondaryText}>Foto</Text>
+        <Pressable style={styles.secondary} onPress={() => addFile('camara')} disabled={busy}>
+          <Text style={styles.secondaryText}>Cámara</Text>
+        </Pressable>
+        <Pressable style={styles.secondary} onPress={() => addFile('galeria')} disabled={busy}>
+          <Text style={styles.secondaryText}>Galería</Text>
         </Pressable>
       </View>
       {msg ? <Text style={styles.msg}>{msg}</Text> : null}

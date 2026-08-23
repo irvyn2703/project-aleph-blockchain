@@ -2,14 +2,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { insertDocumento, updateDocumentoRag } from '../db/queries';
 import { ingestExpedienteText } from '../qvac/rag';
 import type { DocumentoTipo } from '../types';
+import { classifyDoc, extOf } from './classify';
 
-const IMAGE_EXT = new Set(['jpg', 'jpeg', 'png', 'bmp', 'webp']);
-const TEXT_EXT = new Set(['txt', 'md']);
-
-function extOf(name: string): string {
-  const i = name.lastIndexOf('.');
-  return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
-}
+export { classifyDoc, extOf, type DocKind } from './classify';
 
 export async function copyIntoDocs(uri: string, name: string): Promise<string> {
   const dir = FileSystem.documentDirectory + 'expediente/';
@@ -23,22 +18,23 @@ export async function ingestDocumento(params: {
   uri: string;
   name: string;
   tipo: DocumentoTipo;
+  mimeType?: string;
   ocrImage?: (path: string) => Promise<string>;
 }): Promise<{ id: number; extracted: string; warnings: string[] }> {
   const warnings: string[] = [];
   const dest = await copyIntoDocs(params.uri, params.name);
-  const ext = extOf(params.name);
+  const kind = params.uri.startsWith('seed://') ? 'texto' : classifyDoc(params.name, params.mimeType);
   let extracted = '';
 
-  if (TEXT_EXT.has(ext) || params.uri.startsWith('seed://')) {
+  if (kind === 'texto') {
     extracted = await FileSystem.readAsStringAsync(dest, { encoding: FileSystem.EncodingType.UTF8 });
-  } else if (IMAGE_EXT.has(ext)) {
+  } else if (kind === 'imagen') {
     if (!params.ocrImage) {
       warnings.push('Imagen guardada. OCR no disponible todavía (cargá el modelo en un dispositivo físico).');
     } else {
       extracted = await params.ocrImage(dest);
     }
-  } else if (ext === 'pdf') {
+  } else if (kind === 'pdf') {
     warnings.push('PDF nativo guardado. Para el MVP, pegá texto o una foto de las páginas si el PDF es escaneado.');
     try {
       const maybe = await FileSystem.readAsStringAsync(dest, { encoding: FileSystem.EncodingType.UTF8 });
@@ -47,7 +43,10 @@ export async function ingestDocumento(params: {
       // binary pdf
     }
   } else {
-    warnings.push(`Extensión .${ext} no extrae texto. Se guarda el archivo.`);
+    const ext = extOf(params.name);
+    warnings.push(
+      ext ? `Extensión .${ext} no extrae texto. Se guarda el archivo.` : 'Formato no reconocido. Se guarda el archivo.'
+    );
   }
 
   const id = await insertDocumento({
