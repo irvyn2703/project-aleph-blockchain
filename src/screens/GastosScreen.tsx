@@ -8,9 +8,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { insertGasto, listGastos, listPartidas } from '../db/queries';
+import { insertGasto, listGastos, listPartidas, replaceGastos } from '../db/queries';
+import { parseGastosXlsx } from '../import/xlsx';
 import { ocrImage, parseComprobante } from '../qvac/ocr';
 import { colors, radius } from '../theme';
 import type { Partida } from '../types';
@@ -41,6 +43,36 @@ export function GastosScreen({ onBack, onChanged }: { onBack: () => void; onChan
   useEffect(() => {
     void reload();
   }, []);
+
+  async function importXlsx() {
+    if (partidas.length === 0) {
+      setMsg('Primero importá el presupuesto. Los gastos se asignan a clave_partida.');
+      return;
+    }
+    const picked = await DocumentPicker.getDocumentAsync({
+      type: [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        '*/*',
+      ],
+      copyToCacheDirectory: true,
+    });
+    if (picked.canceled || !picked.assets[0]) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const parsed = await parseGastosXlsx(picked.assets[0].uri);
+      const result = await replaceGastos(parsed.gastos);
+      await reload();
+      onChanged();
+      const skip = result.skipped.length ? ` Sin partida: ${result.skipped.slice(0, 5).join(', ')}.` : '';
+      setMsg(`Importados ${result.inserted} gastos.${skip}`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function pickAndOcr() {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -115,6 +147,16 @@ export function GastosScreen({ onBack, onChanged }: { onBack: () => void; onChan
     <View style={styles.root}>
       <ScreenHeader title="Control de gastos" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.body}>
+        <Text style={styles.hint}>
+          Importá un Excel (clave_partida, monto, descripcion, fecha) o cargá uno a mano. Hace falta el presupuesto
+          primero.
+        </Text>
+        <Pressable style={styles.primary} onPress={importXlsx} disabled={busy}>
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Importar Excel de gastos</Text>}
+        </Pressable>
+        {partidas.length === 0 ? (
+          <Text style={styles.msg}>No hay partidas. Importá el presupuesto antes de cargar gastos.</Text>
+        ) : null}
         <Text style={styles.label}>Partida</Text>
         <ScrollView horizontal contentContainerStyle={styles.chips}>
           {partidas.map((p) => (
@@ -136,12 +178,13 @@ export function GastosScreen({ onBack, onChanged }: { onBack: () => void; onChan
         <Pressable style={styles.secondary} onPress={pickAndOcr} disabled={busy}>
           <Text style={styles.secondaryText}>Foto de comprobante (OCR)</Text>
         </Pressable>
-        <Pressable style={styles.primary} onPress={save} disabled={busy}>
+        <Pressable style={styles.primary} onPress={save} disabled={busy || partidas.length === 0}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Confirmar y guardar</Text>}
         </Pressable>
         {msg ? <Text style={styles.msg}>{msg}</Text> : null}
 
         <Text style={styles.section}>Cargados</Text>
+        {gastos.length === 0 ? <Text style={styles.hint}>Todavía no hay gastos.</Text> : null}
         {gastos.map((g) => (
           <View key={g.id} style={styles.card}>
             <Text style={styles.gMonto}>{money(g.monto)}</Text>
@@ -159,6 +202,7 @@ export function GastosScreen({ onBack, onChanged }: { onBack: () => void; onChan
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 8 },
   body: { paddingBottom: 40 },
+  hint: { color: colors.muted, fontSize: 12, marginBottom: 10 },
   label: { color: colors.muted, marginTop: 12, marginBottom: 6, fontSize: 12 },
   input: {
     backgroundColor: colors.surface,

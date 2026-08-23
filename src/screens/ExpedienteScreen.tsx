@@ -68,7 +68,7 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
   return (
     <View style={styles.root}>
       <ScreenHeader title="Expediente" onBack={onBack} />
-      <Text style={styles.hint}>Demo: legales y memoria de cálculo. Planos se pueden guardar pero no son fuente de cantidades.</Text>
+      <Text style={styles.hint}>Cargá legales y memoria de cálculo. Los planos se pueden guardar pero no son fuente de cantidades.</Text>
       <View style={styles.chips}>
         {(['legal', 'memoria', 'plano'] as DocumentoTipo[]).map((t) => (
           <Pressable key={t} onPress={() => setTipo(t)} style={[styles.chip, tipo === t && styles.chipOn]}>

@@ -4,7 +4,7 @@ import { getDb } from './client';
 export async function getObraNombre(): Promise<string> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ nombre: string }>('SELECT nombre FROM obra WHERE id = 1');
-  return row?.nombre ?? 'Obra';
+  return row?.nombre ?? 'Sin presupuesto cargado';
 }
 
 export async function setObraNombre(nombre: string): Promise<void> {
@@ -240,6 +240,42 @@ export async function listGastos(): Promise<(Gasto & { partidaClave: string; par
     partidaClave: g.partida_clave,
     partidaNombre: g.partida_nombre,
   }));
+}
+
+export async function replaceGastos(
+  items: {
+    clavePartida: string;
+    monto: number;
+    descripcion: string;
+    fecha: string;
+  }[]
+): Promise<{ inserted: number; skipped: string[] }> {
+  const db = await getDb();
+  const skipped: string[] = [];
+  let inserted = 0;
+  await db.withTransactionAsync(async () => {
+    await db.execAsync('DELETE FROM gastos;');
+    for (const item of items) {
+      const partida = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM partidas WHERE lower(clave) = ?',
+        item.clavePartida.trim().toLowerCase()
+      );
+      if (!partida) {
+        skipped.push(item.clavePartida || '(sin clave)');
+        continue;
+      }
+      await db.runAsync(
+        `INSERT INTO gastos (partida_id, monto, descripcion, ruta_comprobante, fecha, ocr_raw)
+         VALUES (?, ?, ?, NULL, ?, NULL)`,
+        partida.id,
+        item.monto,
+        item.descripcion,
+        item.fecha
+      );
+      inserted += 1;
+    }
+  });
+  return { inserted, skipped: [...new Set(skipped)] };
 }
 
 export async function insertGasto(input: {

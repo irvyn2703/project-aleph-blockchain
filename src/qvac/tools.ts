@@ -1,4 +1,3 @@
-import type { Tool } from '@qvac/sdk';
 import {
   buscarConceptos,
   findPartida,
@@ -8,20 +7,34 @@ import {
 } from '../db/queries';
 import { searchExpediente } from './rag';
 
+export type ObraTool = {
+  type: 'function';
+  name: string;
+  description: string;
+  parameters: {
+    type: 'object';
+    properties: Record<
+      string,
+      { type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'integer'; description?: string }
+    >;
+    required?: string[];
+  };
+};
+
 export const SYSTEM_PROMPT = `Sos el asistente local de ESTA obra. Hablás en español rioplatense, breve y preciso.
 
 Reglas:
 - Los números de presupuesto y gastos salen SOLO de las tools. Nunca inventes un importe, cantidad o PU.
 - Si una tool no encuentra el dato de dinero, podés estimar SOLO si el usuario lo necesita, y etiquetá la respuesta con [ESTIMACIÓN — no está en el presupuesto/gastos].
 - Documentos legales y memoria: usá buscar_expediente. Si no está en el expediente, NO inventes cláusulas, plazos ni multas. Decí que no está.
-- Citá partida por clave (ej. CIM-01) o el nombre del documento.
+- Citá partida por clave o el nombre del documento.
 - No hables de otras obras.`;
 
 function money(n: number): string {
   return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 });
 }
 
-export const obraTools: Tool[] = [
+export const obraTools: ObraTool[] = [
   {
     type: 'function',
     name: 'total_obra',

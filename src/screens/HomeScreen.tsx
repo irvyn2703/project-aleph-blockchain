@@ -35,7 +35,7 @@ export function HomeScreen({
       id: 'hello',
       role: 'assistant',
       content:
-        'Preguntame por el total, una partida (CIM-01 / cimentación), el contrato (plazos, multas) o gastado vs presupuesto.',
+        'Todavía no hay datos de demo. Importá tu Excel en Presupuestos y tus gastos en Control de gastos.',
     },
   ]);
   const [busy, setBusy] = useState(false);

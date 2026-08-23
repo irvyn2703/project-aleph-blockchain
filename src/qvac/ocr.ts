@@ -1,9 +1,10 @@
-import { ocr } from '@qvac/sdk';
+import { getQvac } from './sdk';
 import { withOcr, type ProgressHandler } from './models';
 
 export async function ocrImage(path: string, onProgress?: ProgressHandler): Promise<string> {
+  const sdk = await getQvac();
   return withOcr(async (modelId) => {
-    const { blocks } = ocr({ modelId, image: path });
+    const { blocks } = sdk.ocr({ modelId, image: path });
     const result = await blocks;
     return result
       .map((b) => b.text)

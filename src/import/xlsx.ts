@@ -46,6 +46,8 @@ function headerAlias(h: string): string {
     p_u: 'pu',
     precio_unitario: 'pu',
     importe: 'importe',
+    monto: 'monto',
+    fecha: 'fecha',
     nombre: 'nombre_partida',
     nombre_partida: 'nombre_partida',
     clave_partida: 'clave_partida',
@@ -124,4 +126,45 @@ export async function parsePresupuestoXlsx(fileUri: string): Promise<ParsedPresu
     throw new Error('No se leyeron partidas. Usá columnas: clave_partida, nombre_partida, clave_concepto, descripcion, um, cantidad, pu, importe.');
   }
   return { partidas, warnings };
+}
+
+export type ParsedGasto = {
+  clavePartida: string;
+  monto: number;
+  descripcion: string;
+  fecha: string;
+};
+
+export async function parseGastosXlsx(fileUri: string): Promise<{ gastos: ParsedGasto[]; warnings: string[] }> {
+  const b64 = await FileSystem.readAsStringAsync(fileUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  const wb = XLSX.read(b64, { type: 'base64' });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) throw new Error('El Excel no tiene hojas.');
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], { defval: '' });
+  if (rows.length === 0) throw new Error('La hoja está vacía.');
+
+  const warnings: string[] = [];
+  const gastos: ParsedGasto[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const raw of rows) {
+    const row: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      row[headerAlias(normHeader(k))] = v;
+    }
+    const clavePartida = String(row.clave_partida ?? row.partida ?? '').trim();
+    const monto = num(row.monto ?? row.importe ?? row.cantidad);
+    if (!clavePartida || !(monto > 0)) continue;
+    const descripcion = String(row.descripcion ?? row.nombre ?? 'Gasto').trim() || 'Gasto';
+    let fecha = String(row.fecha ?? '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}/.test(fecha)) fecha = today;
+    gastos.push({ clavePartida, monto, descripcion, fecha: fecha.slice(0, 10) });
+  }
+
+  if (gastos.length === 0) {
+    throw new Error('No se leyeron gastos. Usá columnas: clave_partida, monto, descripcion, fecha (AAAA-MM-DD).');
+  }
+  return { gastos, warnings };
 }

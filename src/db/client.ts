@@ -47,6 +47,11 @@ CREATE TABLE IF NOT EXISTS documentos (
   metadata TEXT,
   rag_status TEXT NOT NULL DEFAULT 'pendiente'
 );
+
+CREATE TABLE IF NOT EXISTS meta (
+  k TEXT PRIMARY KEY,
+  v TEXT NOT NULL
+);
 `;
 
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
