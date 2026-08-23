@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.expo/
+android/
+ios/
+package-lock.json
+# Bundle y entry del worker QVAC: generados por `expo prebuild`.
+qvac/
+assets/

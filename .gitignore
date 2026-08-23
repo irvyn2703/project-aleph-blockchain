@@ -39,3 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# QVAC worker: regenerado por `expo prebuild` (plugin withMobileBundle).
+# El bundle pesa ~11MB e incrusta rutas absolutas de la máquina que lo generó,
+# así que versionarlo rompe el build en cualquier otra máquina.
+/qvac
+
