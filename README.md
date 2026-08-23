@@ -4,6 +4,8 @@ Expo / React Native app for a construction site: local SQLite budget, expediente
 
 Data never leaves the phone. QVAC (`@qvac/sdk` [`^0.17.1`](package.json)) runs inside a native Bare worker — it needs a **physical Android device**, not an emulator or Expo Go.
 
+**Demo:** [watch the walkthrough](https://youtu.be/yOtOl350w3I)
+
 ## Screens
 
 | Tab        | What it does                                                                    |
@@ -154,6 +156,8 @@ Import lives in Presupuestos (budget) and Capturar (expenses). Header row can si
 Importing a budget replaces the previous one and deletes existing expenses. Expense rows whose `clave_partida` does not exist are skipped.
 
 ## Demo
+
+Walkthrough: [https://youtu.be/yOtOl350w3I](https://youtu.be/yOtOl350w3I)
 
 1. Import a budget Excel in Presupuestos.
 2. "¿Cuál es el total de la obra y de la partida de cimentación?"
