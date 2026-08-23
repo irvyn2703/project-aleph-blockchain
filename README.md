@@ -38,18 +38,91 @@ Honest note: there is no LLM text-generation call wired up yet (only model loadi
 - **Where it runs**: on-device, on the phone's GPU (`device: 'gpu'`, `ctx_size: 2048` in [`models.ts#L27-L31`](src/qvac/models.ts#L27-L31)), inside the Bare worker — **no** cloud calls.
 - **Approximate latency**: _pending — will be added in a future update._
 
-## Setup
+## Setup on a fresh machine
+
+### 0. Prerequisites
+
+| Tool | Version | Notes |
+|---|---|---|
+| Node.js | 20 LTS or newer (developed on 24.x) | `node -v` |
+| npm | ships with Node | `npm -v` |
+| JDK | **17** (Temurin/Zulu) | Required by the Android Gradle Plugin used by RN 0.81 / Expo SDK 54. JDK 21+ is not supported. |
+| Android SDK | Platform 35 + Build-Tools 35, NDK, CMake | Easiest via Android Studio → SDK Manager |
+| Android device | **physical**, Android 10+ (`minSdkVersion 29`) | USB debugging on. QVAC does **not** run in an emulator or Expo Go. |
+
+Set the Android env vars (skip if Android Studio already did it):
 
 ```bash
-npm install
-npx expo prebuild
-npx expo run:android --device
+# macOS / Linux — add to ~/.zshrc or ~/.bashrc
+export ANDROID_HOME="$HOME/Library/Android/sdk"   # Linux: $HOME/Android/Sdk
+export PATH="$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator"
+export JAVA_HOME="$(/usr/libexec/java_home -v 17)" # macOS only
 ```
 
-- Requires a **physical Android device** connected (QVAC doesn't run in an emulator or Expo Go).
-- Windows: the native Android prebuild requires JDK + Android SDK.
-- First launch downloads the models (LLM, embeddings, OCR) to the device.
-- `npm run typecheck` runs `tsc --noEmit` for type checking.
+```powershell
+# Windows (PowerShell, persistent)
+setx ANDROID_HOME "$env:LOCALAPPDATA\Android\Sdk"
+setx JAVA_HOME "C:\Program Files\Eclipse Adoptium\jdk-17..."
+# then add %ANDROID_HOME%\platform-tools to PATH
+```
+
+Verify: `java -version` → 17.x, and `adb devices` lists your phone as `device` (accept the USB debugging prompt on the phone).
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/irvyn2703/project-aleph-blockchain.git
+cd project-aleph-blockchain
+npm install
+```
+
+No `.env` file is needed — the app has no backend and reads no environment variables.
+
+### 2. Generate the native project + QVAC worker
+
+`android/`, `ios/` and `qvac/` are **gitignored on purpose** ([.gitignore](.gitignore)) — the QVAC worker bundle is ~11 MB and embeds absolute paths from the machine that built it, so it must be regenerated locally:
+
+```bash
+npx expo prebuild
+```
+
+This runs the `@qvac/sdk/expo-plugin` ([app.json](app.json)), which bundles `qvac/worker.bundle.js` from [qvac.config.json](qvac.config.json) and writes the `android/` project.
+
+### 3. Run on the device
+
+```bash
+npm run android      # == expo run:android --device
+```
+
+Pick your device when prompted. The first build compiles the native code and takes several minutes; later runs reuse it and only reload JS.
+
+On first launch the app downloads the QVAC models (LLM, embeddings, OCR) to the device — keep it on Wi-Fi and give it a few minutes.
+
+### 4. Verify the toolchain
+
+```bash
+npm run verify       # typecheck + lint + tests
+```
+
+Individually: `npm run typecheck` (`tsc --noEmit`), `npm run lint`, `npm test` (Vitest), `npm run format`.
+
+### Optional: EAS builds
+
+`eas.json` defines `development`, `preview` (APK) and `production` profiles against project `aleph-hackathon` (owner `enriquerv`). To build in the cloud you need access to that Expo project:
+
+```bash
+npx eas login
+npx eas build --profile preview --platform android
+```
+
+### Troubleshooting
+
+- **`SDK location not found` / Gradle can't find the SDK** — `ANDROID_HOME` isn't set in the shell that runs the build; re-open the terminal after exporting it.
+- **`Unsupported class file major version` or a Gradle/Kotlin JVM error** — you're on the wrong JDK. Confirm `java -version` reports 17.
+- **No device listed** — `adb devices`; unplug/replug, accept the RSA prompt on the phone, and make sure it's not in "charge only" mode.
+- **App crashes on start after pulling new commits** — re-run `npx expo prebuild` (the QVAC worker or native config may have changed). Use `npx expo prebuild --clean` to regenerate from scratch.
+- **Stale Metro cache** — `npx expo start --clear`.
+- **Nuclear reset** — `rm -rf node_modules android qvac && npm install && npx expo prebuild`.
 
 ## Excel
 
