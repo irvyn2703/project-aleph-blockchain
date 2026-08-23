@@ -61,15 +61,30 @@ export function HomeScreen({
       const out = await runChatTurn({
         history: historyRef.current,
         userText: text,
-        onDelta: (chunk) => {
-          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, content: chunk } : x)));
+        // `onDelta` ya trae el texto acumulado del turno, no solo el último
+        // fragmento: se asigna tal cual para que el mensaje crezca en pantalla.
+        onDelta: (parcial) => {
+          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, content: parcial } : x)));
+        },
+        onProgress: (_kind, pct, label) => {
+          setMessages((m) =>
+            m.map((x) =>
+              x.id === assistantId ? { ...x, content: pct == null ? label : `${label} ${pct}%` } : x
+            )
+          );
         },
       });
-      setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, content: out } : x)));
+      setMessages((m) =>
+        m.map((x) =>
+          x.id === assistantId
+            ? { ...x, content: out.text, fuente: out.fuente, toolCalls: out.toolCalls }
+            : x
+        )
+      );
       historyRef.current = [
         ...historyRef.current,
         { role: 'user', content: text },
-        { role: 'assistant', content: out },
+        { role: 'assistant', content: out.text },
       ].slice(-12) as HistoryTurn[];
     } catch (e) {
       setMessages((m) =>
@@ -171,6 +186,15 @@ export function HomeScreen({
         renderItem={({ item }) => (
           <View style={[styles.bubble, item.role === 'user' ? styles.user : styles.assistant]}>
             <Text style={[styles.bubbleText, item.role === 'user' && styles.userBubbleText]}>{item.content}</Text>
+            {item.role === 'assistant' && item.fuente ? (
+              <Text style={styles.fuente}>
+                {item.fuente === 'sql'
+                  ? 'Fuente: SQLite'
+                  : item.toolCalls?.length
+                    ? `IA local · ${item.toolCalls.join(', ')}`
+                    : 'IA local'}
+              </Text>
+            ) : null}
           </View>
         )}
       />
@@ -287,6 +311,7 @@ const styles = StyleSheet.create({
   user: { alignSelf: 'flex-end', backgroundColor: colors.userBubble },
   assistant: { alignSelf: 'flex-start', backgroundColor: colors.assistantBubble, borderTopLeftRadius: 6 },
   bubbleText: { color: colors.text, fontSize: 14, lineHeight: 21 },
+  fuente: { color: colors.muted, fontSize: 11, marginTop: 6 },
   userBubbleText: { color: colors.white },
   inputRow: {
     width: 'auto',

@@ -32,9 +32,17 @@ export async function ensureLlm(onProgress?: ProgressHandler): Promise<string> {
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,
     modelConfig: {
-      device: 'gpu',
+      // CPU y sin capas en GPU. El default (device 'gpu', gpu_layers 99)
+      // sube el modelo entero a la GPU: con el OCR —modelos de 95 MB— esa
+      // ruta pedía 4,8 GB de golpe y el sistema mataba el proceso. Este
+      // modelo son 773 MB, así que el riesgo es mayor, no menor.
+      device: 'cpu',
+      gpu_layers: 0,
       ctx_size: 2048,
       tools: true,
+      // Sin mmap el modelo se copia entero a RAM al cargar; con mmap el
+      // kernel pagina bajo demanda y el pico baja mucho.
+      no_mmap: false,
       verbosity: VERBOSITY.ERROR,
     },
     onProgress: (p: ModelProgressUpdate) => onProgress?.('llm', Math.round(p.percentage), 'Cargando LLM'),
@@ -54,6 +62,10 @@ export async function ensureEmbeddings(onProgress?: ProgressHandler): Promise<st
   });
   const modelId = await loadModel({
     modelSrc: GTE_LARGE_FP16,
+    // Mismo criterio que el LLM: el default sube el modelo a la GPU y en
+    // este device esa ruta agota la memoria. Son 670 MB.
+    // Ojo: este plugin usa `gpuLayers` en camelCase, no `gpu_layers`.
+    modelConfig: { device: 'cpu', gpuLayers: 0 },
     onProgress: (p: ModelProgressUpdate) =>
       onProgress?.('embeddings', Math.round(p.percentage), 'Cargando embeddings'),
   });

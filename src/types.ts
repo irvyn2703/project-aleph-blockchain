@@ -46,9 +46,15 @@ export type Documento = {
 
 export type ChatRole = 'user' | 'assistant' | 'system';
 
+/** De dónde salió una respuesta del asistente: consulta SQL directa o el LLM. */
+export type RespuestaFuente = 'sql' | 'llm';
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
   estimate?: boolean;
+  fuente?: RespuestaFuente;
+  /** Tools que el LLM ejecutó para responder, para mostrar procedencia. */
+  toolCalls?: string[];
 };
