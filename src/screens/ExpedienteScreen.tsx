@@ -6,6 +6,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { listDocumentos } from '../db/queries';
 import { ingestDocumento } from '../ingest/documents';
 import { ocrImage } from '../qvac/ocr';
+import { DocumentoPreviewScreen } from './DocumentoPreviewScreen';
 import { colors, layout, radius } from '../theme';
 import type { Documento, DocumentoTipo } from '../types';
 
@@ -16,6 +17,7 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
   const [tipo, setTipo] = useState<DocumentoTipo>('legal');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<Documento | null>(null);
 
   async function reload() {
     setDocs(await listDocumentos());
@@ -79,6 +81,16 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
     }
   }
 
+  if (previewDoc) {
+    return (
+      <DocumentoPreviewScreen
+        doc={previewDoc}
+        onBack={() => setPreviewDoc(null)}
+        onChanged={() => void reload()}
+      />
+    );
+  }
+
   return (
     <View style={styles.root}>
       <ScreenHeader title="Expediente" onBack={onBack} />
@@ -108,7 +120,7 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
       {msg ? <Text style={styles.msg}>{msg}</Text> : null}
       <ScrollView contentContainerStyle={styles.list}>
         {docs.map((d) => (
-          <View key={d.id} style={styles.card}>
+          <Pressable key={d.id} style={styles.card} onPress={() => setPreviewDoc(d)}>
             <View style={styles.docIcon}><Text style={styles.docIconText}>▤</Text></View>
             <View style={styles.docCopy}>
               <Text style={styles.nombre}>{d.nombre}</Text>
@@ -117,7 +129,7 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
               </Text>
             </View>
             <Text style={styles.arrow}>›</Text>
-          </View>
+          </Pressable>
         ))}
       </ScrollView>
     </View>

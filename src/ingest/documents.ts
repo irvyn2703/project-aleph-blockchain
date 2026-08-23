@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { insertDocumento, updateDocumentoRag } from '../db/queries';
+import { deleteDocumento, insertDocumento, updateDocumentoRag } from '../db/queries';
 import { ingestExpedienteText } from '../qvac/rag';
-import type { DocumentoTipo } from '../types';
+import type { Documento, DocumentoTipo } from '../types';
 import { classifyDoc, extOf } from './classify';
 
 export { classifyDoc, extOf, type DocKind } from './classify';
@@ -68,4 +68,20 @@ export async function ingestDocumento(params: {
   }
 
   return { id, extracted, warnings };
+}
+
+/**
+ * Borra un documento del expediente: el archivo copiado a `expediente/` y la
+ * fila en `documentos`. Es best-effort con el archivo (`idempotent: true`),
+ * porque un doc de seed (`seed://`) o ya borrado a mano no debería frenar el
+ * borrado de la fila.
+ *
+ * Ojo: no hay forma de sacar sus chunks del índice RAG —`@qvac/sdk` no
+ * expone un borrado por id—, así que texto de un documento eliminado puede
+ * seguir apareciendo en `buscar_expediente` hasta que se reingesten todos
+ * los documentos restantes. Conocido, no bloqueante para este MVP.
+ */
+export async function eliminarDocumento(doc: Documento): Promise<void> {
+  await FileSystem.deleteAsync(doc.ruta, { idempotent: true }).catch(() => undefined);
+  await deleteDocumento(doc.id);
 }

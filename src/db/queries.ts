@@ -352,6 +352,11 @@ export async function updateDocumentoRag(id: number, ragStatus: Documento['ragSt
   }
 }
 
+export async function deleteDocumento(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM documentos WHERE id = ?', id);
+}
+
 export async function listDocumentosTexto(): Promise<{ nombre: string; tipo: DocumentoTipo; texto: string }[]> {
   const docs = await listDocumentos();
   return docs
