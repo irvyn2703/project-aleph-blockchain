@@ -6,6 +6,7 @@ import { BottomNav } from './src/components/BottomNav';
 import { getDb } from './src/db/client';
 import { clearDemoDataOnce } from './src/db/seed';
 import { useAppSafeArea } from './src/hooks/useAppSafeArea';
+import { useKeyboardHeight } from './src/hooks/useKeyboardHeight';
 import { ExpedienteScreen } from './src/screens/ExpedienteScreen';
 import { GastosScreen } from './src/screens/GastosScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -15,6 +16,7 @@ import type { ScreenName } from './src/types';
 
 export default function App() {
   const insets = useAppSafeArea();
+  const keyboardHeight = useKeyboardHeight();
   const [screen, setScreen] = useState<ScreenName>('home');
   const [qvacLabel, setQvacLabel] = useState('Inicializando datos…');
   const [tick, setTick] = useState(0);
@@ -47,6 +49,7 @@ export default function App() {
             qvacLabel={qvacLabel}
             onOpen={setScreen}
             refreshToken={tick}
+            keyboardHeight={keyboardHeight}
           />
         ) : null}
         {screen === 'presupuestos' ? (
@@ -57,7 +60,9 @@ export default function App() {
         ) : null}
         {screen === 'expediente' ? <ExpedienteScreen onBack={() => setScreen('home')} /> : null}
       </View>
-      <BottomNav active={screen} onOpen={setScreen} bottomInset={insets.bottom} />
+      {keyboardHeight === 0 ? (
+        <BottomNav active={screen} onOpen={setScreen} bottomInset={insets.bottom} />
+      ) : null}
     </View>
   );
 }
