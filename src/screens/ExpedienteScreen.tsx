@@ -6,7 +6,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { listDocumentos } from '../db/queries';
 import { ingestDocumento } from '../ingest/documents';
 import { ocrImage } from '../qvac/ocr';
-import { colors, radius } from '../theme';
+import { colors, layout, radius } from '../theme';
 import type { Documento, DocumentoTipo } from '../types';
 
 export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
@@ -68,7 +68,11 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
   return (
     <View style={styles.root}>
       <ScreenHeader title="Expediente" onBack={onBack} />
-      <Text style={styles.hint}>Cargá legales y memoria de cálculo. Los planos se pueden guardar pero no son fuente de cantidades.</Text>
+      <Text style={styles.subtitle}>{docs.length} archivos · cifrado en este teléfono</Text>
+      <View style={styles.search}>
+        <Text style={styles.searchText}>⌕  Buscar documento, proveedor o partida…</Text>
+      </View>
+      <Text style={styles.hint}>Elegí el tipo de documento antes de incorporarlo.</Text>
       <View style={styles.chips}>
         {(['legal', 'memoria', 'plano'] as DocumentoTipo[]).map((t) => (
           <Pressable key={t} onPress={() => setTipo(t)} style={[styles.chip, tipo === t && styles.chipOn]}>
@@ -88,10 +92,14 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
       <ScrollView contentContainerStyle={styles.list}>
         {docs.map((d) => (
           <View key={d.id} style={styles.card}>
-            <Text style={styles.nombre}>{d.nombre}</Text>
-            <Text style={styles.meta}>
-              {d.tipo} · {d.ragStatus} · {d.fechaSubida.slice(0, 10)}
-            </Text>
+            <View style={styles.docIcon}><Text style={styles.docIconText}>▤</Text></View>
+            <View style={styles.docCopy}>
+              <Text style={styles.nombre}>{d.nombre}</Text>
+              <Text style={styles.meta}>
+                {d.tipo} · {d.ragStatus} · {d.fechaSubida.slice(0, 10)}
+              </Text>
+            </View>
+            <Text style={styles.arrow}>›</Text>
           </View>
         ))}
       </ScrollView>
@@ -100,19 +108,30 @@ export function ExpedienteScreen({ onBack }: { onBack: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 8 },
+  root: {
+    flex: 1,
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    backgroundColor: colors.bg,
+    paddingHorizontal: layout.pagePadding,
+    paddingTop: 18,
+  },
+  subtitle: { color: colors.muted, fontSize: 15, marginTop: -10, marginBottom: 20 },
+  search: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 16, marginBottom: 18 },
+  searchText: { color: colors.muted, fontSize: 14 },
   hint: { color: colors.muted, fontSize: 12, marginBottom: 10 },
   chips: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   chip: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
+    backgroundColor: colors.bg,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipOn: { backgroundColor: colors.greenDark, borderColor: colors.green },
-  chipText: { color: colors.text, fontWeight: '600' },
+  chipOn: { backgroundColor: colors.greenSoft, borderColor: colors.green },
+  chipText: { color: colors.text, fontWeight: '600', textTransform: 'capitalize' },
   actions: { flexDirection: 'row', gap: 8 },
   primary: {
     flex: 1,
@@ -121,7 +140,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  primaryText: { color: colors.text, fontWeight: '700' },
+  primaryText: { color: colors.white, fontWeight: '700' },
   secondary: {
     flex: 1,
     borderWidth: 1,
@@ -131,9 +150,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryText: { color: colors.text },
-  msg: { color: colors.yellow, marginTop: 10, fontSize: 12 },
-  list: { paddingTop: 16, paddingBottom: 40, gap: 8 },
-  card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 12 },
-  nombre: { color: colors.text, fontWeight: '600' },
+  msg: { color: colors.greenDark, marginTop: 10, fontSize: 12 },
+  list: { paddingTop: 18, paddingBottom: 32 },
+  card: {
+    minHeight: 76,
+    backgroundColor: colors.bg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  docIcon: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  docIconText: { color: colors.text, fontSize: 18 },
+  docCopy: { flex: 1 },
+  nombre: { color: colors.text, fontWeight: '600', fontSize: 15 },
   meta: { color: colors.muted, marginTop: 4, fontSize: 12 },
+  arrow: { color: colors.muted, fontSize: 21 },
 });

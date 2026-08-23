@@ -4,7 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { listPresupuesto, replacePresupuesto, setObraNombre, totalObra } from '../db/queries';
 import { parsePresupuestoXlsx } from '../import/xlsx';
-import { colors, radius } from '../theme';
+import { colors, layout, radius } from '../theme';
 import type { PartidaConConceptos } from '../types';
 
 function money(n: number): string {
@@ -99,21 +99,29 @@ export function PresupuestosScreen({ onBack, onChanged }: { onBack: () => void; 
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 8 },
-  hint: { color: colors.muted, fontSize: 12, marginBottom: 10 },
+  root: {
+    flex: 1,
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    backgroundColor: colors.bg,
+    paddingHorizontal: layout.pagePadding,
+    paddingTop: 18,
+  },
+  hint: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: -8, marginBottom: 14 },
   importBtn: {
     backgroundColor: colors.green,
     borderRadius: radius.md,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  importText: { color: colors.text, fontWeight: '700' },
-  total: { color: colors.text, fontWeight: '700', marginTop: 14, marginBottom: 8, fontSize: 16 },
-  msg: { color: colors.yellow, fontSize: 12, marginBottom: 8 },
+  importText: { color: colors.white, fontWeight: '700' },
+  total: { color: colors.text, fontWeight: '700', marginTop: 20, marginBottom: 10, fontSize: 18 },
+  msg: { color: colors.greenDark, backgroundColor: colors.greenSoft, borderRadius: radius.sm, padding: 10, fontSize: 12, marginBottom: 10 },
   empty: { color: colors.muted, fontSize: 13, marginBottom: 8 },
   list: { paddingBottom: 32, gap: 10 },
-  card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, borderWidth: 1, borderColor: colors.border },
-  clave: { color: colors.green, fontWeight: '700' },
+  card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 14, borderWidth: 1, borderColor: colors.border },
+  clave: { color: colors.greenDark, fontWeight: '700' },
   nombre: { color: colors.text, fontSize: 16, marginTop: 2 },
   importe: { color: colors.muted, marginTop: 4 },
   concepto: { marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },

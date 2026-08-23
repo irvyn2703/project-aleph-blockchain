@@ -19,15 +19,17 @@ export function ScreenHeader({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 16 },
   back: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backText: { color: colors.text, fontSize: 22, lineHeight: 24 },
-  title: { color: colors.text, fontSize: 18, fontWeight: '700', flex: 1 },
+  backText: { color: colors.text, fontSize: 25, lineHeight: 27, marginTop: -2 },
+  title: { color: colors.text, fontSize: 29, letterSpacing: -0.8, fontWeight: '700', flex: 1 },
 });

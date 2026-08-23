@@ -1,4 +1,4 @@
-export type ScreenName = 'home' | 'presupuestos' | 'gastos' | 'expediente';
+export type ScreenName = 'home' | 'presupuestos' | 'gastos' | 'expediente' | 'assistant';
 
 export type DocumentoTipo = 'legal' | 'memoria' | 'plano';
 

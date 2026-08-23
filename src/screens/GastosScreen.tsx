@@ -14,7 +14,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { insertGasto, listGastos, listPartidas, replaceGastos } from '../db/queries';
 import { parseGastosXlsx } from '../import/xlsx';
 import { ocrImage, parseComprobante } from '../qvac/ocr';
-import { colors, radius } from '../theme';
+import { colors, layout, radius } from '../theme';
 import type { Partida } from '../types';
 
 function money(n: number): string {
@@ -145,11 +145,14 @@ export function GastosScreen({ onBack, onChanged }: { onBack: () => void; onChan
 
   return (
     <View style={styles.root}>
-      <ScreenHeader title="Control de gastos" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScreenHeader title="Capturar gasto" onBack={onBack} />
+      <ScrollView
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.hint}>
-          Importá un Excel (clave_partida, monto, descripcion, fecha) o cargá uno a mano. Hace falta el presupuesto
-          primero.
+          Escaneá un comprobante o completá los datos. Todo queda guardado localmente.
         </Text>
         <Pressable style={styles.primary} onPress={importXlsx} disabled={busy}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Importar Excel de gastos</Text>}
@@ -200,29 +203,37 @@ export function GastosScreen({ onBack, onChanged }: { onBack: () => void; onChan
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 8 },
-  body: { paddingBottom: 40 },
-  hint: { color: colors.muted, fontSize: 12, marginBottom: 10 },
-  label: { color: colors.muted, marginTop: 12, marginBottom: 6, fontSize: 12 },
+  root: {
+    flex: 1,
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    backgroundColor: colors.bg,
+    paddingHorizontal: layout.pagePadding,
+    paddingTop: 18,
+  },
+  body: { paddingBottom: 32 },
+  hint: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: -8, marginBottom: 8 },
+  label: { color: colors.text, fontWeight: '600', marginTop: 16, marginBottom: 7, fontSize: 12 },
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bg,
     color: colors.text,
     borderRadius: radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderWidth: 1,
     borderColor: colors.border,
   },
   chips: { gap: 8 },
   chip: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
+    backgroundColor: colors.bg,
+    borderRadius: radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipOn: { backgroundColor: colors.greenDark, borderColor: colors.green },
+  chipOn: { backgroundColor: colors.greenSoft, borderColor: colors.green },
   chipText: { color: colors.text, fontWeight: '600' },
   primary: {
     backgroundColor: colors.green,
@@ -231,7 +242,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
   },
-  primaryText: { color: colors.text, fontWeight: '700' },
+  primaryText: { color: colors.white, fontWeight: '700' },
   secondary: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -241,10 +252,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   secondaryText: { color: colors.text },
-  msg: { color: colors.yellow, marginTop: 10, fontSize: 12 },
-  section: { color: colors.text, fontWeight: '700', marginTop: 24, marginBottom: 8 },
-  card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, marginBottom: 8 },
-  gMonto: { color: colors.text, fontWeight: '700' },
+  msg: { color: colors.greenDark, backgroundColor: colors.greenSoft, borderRadius: radius.sm, padding: 10, marginTop: 12, fontSize: 12 },
+  section: { color: colors.text, fontWeight: '700', fontSize: 17, marginTop: 28, marginBottom: 10 },
+  card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 14, marginBottom: 9 },
+  gMonto: { color: colors.greenDark, fontWeight: '700', fontSize: 16 },
   gDesc: { color: colors.text, marginTop: 4 },
   gMeta: { color: colors.muted, marginTop: 4, fontSize: 12 },
 });

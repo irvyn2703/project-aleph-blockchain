@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +13,7 @@ import {
 } from 'react-native';
 import { getObraNombre } from '../db/queries';
 import { runChatTurn, type HistoryTurn } from '../qvac/chat';
-import { colors, radius } from '../theme';
+import { colors, layout, radius } from '../theme';
 import type { ChatMessage, ScreenName } from '../types';
 
 function nid() {
@@ -20,10 +21,12 @@ function nid() {
 }
 
 export function HomeScreen({
+  mode,
   qvacLabel,
   onOpen,
   refreshToken,
 }: {
+  mode: 'home' | 'assistant';
   qvacLabel: string;
   onOpen: (s: ScreenName) => void;
   refreshToken: number;
@@ -79,30 +82,83 @@ export function HomeScreen({
     }
   }
 
+  if (mode === 'home') {
+    return (
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={styles.homeContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.kicker}>BUEN DÍA</Text>
+        <Text style={styles.pageTitle}>Tu obra, bajo control</Text>
+        <Text style={styles.pageSubtitle}>Documentos, evidencias y respuestas disponibles sin conexión.</Text>
+
+        <View style={styles.projectCard}>
+          <View style={styles.projectTop}>
+            <Text style={styles.projectEyebrow}>OBRA ACTIVA</Text>
+            <View style={styles.localPill}>
+              <View style={styles.whiteDot} />
+              <Text style={styles.localText}>LOCAL</Text>
+            </View>
+          </View>
+          <Text numberOfLines={2} style={styles.projectName}>{obra}</Text>
+          <View style={styles.progressTrack}>
+            <View style={styles.progressValue} />
+          </View>
+          <View style={styles.progressLabels}>
+            <Text style={styles.projectMeta}>Avance documentado</Text>
+            <Text style={styles.projectPercent}>64%</Text>
+          </View>
+        </View>
+
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Acceso rápido</Text>
+          <Text style={styles.sectionAction}>Todo local</Text>
+        </View>
+        <View style={styles.quickGrid}>
+          <Pressable style={styles.quickCard} onPress={() => onOpen('gastos')}>
+            <Text style={styles.quickIcon}>▣</Text>
+            <Text style={styles.quickTitle}>Capturar</Text>
+            <Text style={styles.quickMeta}>Foto u OCR</Text>
+          </Pressable>
+          <Pressable style={styles.quickCard} onPress={() => onOpen('expediente')}>
+            <Text style={styles.quickIcon}>▤</Text>
+            <Text style={styles.quickTitle}>Expediente</Text>
+            <Text style={styles.quickMeta}>Archivos locales</Text>
+          </Pressable>
+          <Pressable style={styles.quickCard} onPress={() => onOpen('assistant')}>
+            <Text style={styles.quickIcon}>✦</Text>
+            <Text style={styles.quickTitle}>Consultar</Text>
+            <Text style={styles.quickMeta}>IA local</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Requiere atención</Text>
+          <Text style={styles.sectionAction}>Estado local</Text>
+        </View>
+        <Pressable style={styles.alertCard} onPress={() => onOpen('presupuestos')}>
+          <View style={styles.alertDot} />
+          <View style={styles.alertCopy}>
+            <Text style={styles.alertTitle}>Presupuesto de la obra</Text>
+            <Text numberOfLines={2} style={styles.alertMeta}>{qvacLabel}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={8}
+      keyboardVerticalOffset={0}
     >
-      <Text style={styles.kicker}>Asistente virtual con IA</Text>
-      <Text style={styles.obra}>{obra}</Text>
-      <Text style={styles.status}>{qvacLabel}</Text>
-
-      <View style={styles.tiles}>
-        <Pressable style={[styles.tile, styles.green]} onPress={() => onOpen('presupuestos')}>
-          <Text style={styles.tileText}>Presupuestos</Text>
-        </Pressable>
-        <Pressable style={[styles.tile, styles.green]} onPress={() => onOpen('gastos')}>
-          <Text style={styles.tileText}>Control de gastos</Text>
-        </Pressable>
-        <Pressable style={[styles.tile, styles.green]} onPress={() => onOpen('expediente')}>
-          <Text style={styles.tileText}>Expediente</Text>
-        </Pressable>
-        <Pressable style={[styles.tile, styles.yellow]} disabled>
-          <Text style={styles.tileTextDark}>Reportes</Text>
-          <Text style={styles.soon}>próximamente</Text>
-        </Pressable>
+      <View style={styles.assistantIntro}>
+        <Text style={styles.kicker}>ASISTENTE PRIVADO</Text>
+        <Text style={styles.pageTitle}>Pregunta a tu obra</Text>
+        <Text style={styles.pageSubtitle}>Las respuestas se construyen con la evidencia disponible en el expediente.</Text>
       </View>
 
       <FlatList
@@ -114,7 +170,7 @@ export function HomeScreen({
         contentContainerStyle={styles.chatContent}
         renderItem={({ item }) => (
           <View style={[styles.bubble, item.role === 'user' ? styles.user : styles.assistant]}>
-            <Text style={styles.bubbleText}>{item.content}</Text>
+            <Text style={[styles.bubbleText, item.role === 'user' && styles.userBubbleText]}>{item.content}</Text>
           </View>
         )}
       />
@@ -131,8 +187,8 @@ export function HomeScreen({
           returnKeyType="send"
         />
         {busy ? <ActivityIndicator color={colors.green} /> : (
-          <Pressable onPress={send} style={styles.send}>
-            <Text style={styles.sendText}>Enviar</Text>
+          <Pressable accessibilityLabel="Enviar pregunta" onPress={send} style={styles.send}>
+            <Text style={styles.sendText}>↑</Text>
           </Pressable>
         )}
       </View>
@@ -141,47 +197,119 @@ export function HomeScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, paddingTop: 12 },
-  kicker: { color: colors.muted, paddingHorizontal: 16, fontSize: 12, letterSpacing: 0.4 },
-  obra: { color: colors.text, paddingHorizontal: 16, fontSize: 20, fontWeight: '700', marginTop: 2 },
-  status: { color: colors.muted, paddingHorizontal: 16, fontSize: 12, marginTop: 4, marginBottom: 12 },
-  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16 },
-  tile: {
-    width: '47.5%',
-    borderRadius: radius.md,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    minHeight: 64,
-    justifyContent: 'center',
+  root: { flex: 1, backgroundColor: colors.bg },
+  homeContent: {
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    paddingHorizontal: layout.pagePadding,
+    paddingTop: 28,
+    paddingBottom: 28,
   },
-  green: { backgroundColor: colors.green },
-  yellow: { backgroundColor: colors.yellow, opacity: 0.85 },
-  tileText: { color: colors.text, fontWeight: '700' },
-  tileTextDark: { color: '#1A1404', fontWeight: '700' },
-  soon: { color: '#1A1404', fontSize: 11, marginTop: 2 },
-  chat: { flex: 1, marginTop: 12 },
-  chatContent: { paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
-  bubble: { maxWidth: '88%', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14 },
-  user: { alignSelf: 'flex-end', backgroundColor: colors.userBubble },
-  assistant: { alignSelf: 'flex-start', backgroundColor: colors.assistantBubble },
-  bubbleText: { color: colors.text, lineHeight: 20 },
-  inputRow: {
+  assistantIntro: {
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    paddingHorizontal: layout.pagePadding,
+    paddingTop: 28,
+  },
+  kicker: { color: colors.greenDark, fontSize: 12, fontWeight: '800', letterSpacing: 2.1 },
+  pageTitle: { color: colors.text, fontSize: 30, lineHeight: 36, letterSpacing: -1.1, fontWeight: '700', marginTop: 12 },
+  pageSubtitle: { color: colors.muted, fontSize: 16, lineHeight: 23, marginTop: 4, maxWidth: 520 },
+  projectCard: {
+    backgroundColor: colors.greenDark,
+    borderRadius: radius.lg,
+    padding: 20,
+    marginTop: 24,
+  },
+  projectTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  projectEyebrow: { color: 'rgba(255,255,255,0.72)', fontSize: 12, letterSpacing: 0.4 },
+  localPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    gap: 7,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  whiteDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.white },
+  localText: { color: colors.white, fontSize: 11, fontWeight: '800' },
+  projectName: { color: colors.white, fontSize: 22, lineHeight: 28, fontWeight: '700', marginTop: 9 },
+  progressTrack: { height: 6, borderRadius: 3, marginTop: 22, backgroundColor: 'rgba(255,255,255,0.23)', overflow: 'hidden' },
+  progressValue: { width: '64%', height: '100%', borderRadius: 3, backgroundColor: '#DDF3B8' },
+  progressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+  projectMeta: { color: 'rgba(255,255,255,0.72)', fontSize: 12 },
+  projectPercent: { color: colors.white, fontSize: 12, fontWeight: '700' },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 26, marginBottom: 12 },
+  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: '700' },
+  sectionAction: { color: colors.greenDark, fontSize: 12, fontWeight: '700' },
+  quickGrid: { flexDirection: 'row', gap: 10 },
+  quickCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 112,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: 14,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.bg,
+  },
+  quickIcon: { color: colors.text, fontSize: 20, position: 'absolute', top: 14, left: 14 },
+  quickTitle: { color: colors.text, fontWeight: '700', fontSize: 13 },
+  quickMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
+  alertCard: {
+    minHeight: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: '#ECDCB9',
+    backgroundColor: colors.yellowDim,
+    padding: 16,
+  },
+  alertDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: colors.yellow, marginRight: 13 },
+  alertCopy: { flex: 1 },
+  alertTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  alertMeta: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 5 },
+  chevron: { color: colors.muted, fontSize: 22 },
+  chat: { flex: 1, marginTop: 14 },
+  chatContent: {
+    width: '100%',
+    maxWidth: layout.maxWidth,
+    alignSelf: 'center',
+    paddingHorizontal: layout.pagePadding,
+    paddingBottom: 10,
+    gap: 12,
+  },
+  bubble: { maxWidth: '90%', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 20 },
+  user: { alignSelf: 'flex-end', backgroundColor: colors.userBubble },
+  assistant: { alignSelf: 'flex-start', backgroundColor: colors.assistantBubble, borderTopLeftRadius: 6 },
+  bubbleText: { color: colors.text, fontSize: 14, lineHeight: 21 },
+  userBubbleText: { color: colors.white },
+  inputRow: {
+    width: 'auto',
+    maxWidth: layout.maxWidth - layout.pagePadding * 2,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: layout.pagePadding,
+    marginBottom: 12,
+    paddingLeft: 16,
+    paddingRight: 7,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.bg,
   },
   input: {
     flex: 1,
-    backgroundColor: colors.surface,
     color: colors.text,
-    borderRadius: radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    fontSize: 14,
+    paddingVertical: 9,
   },
-  send: { backgroundColor: colors.green, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10 },
-  sendText: { color: colors.text, fontWeight: '700' },
+  send: { width: 40, height: 40, backgroundColor: colors.green, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  sendText: { color: colors.white, fontSize: 21, lineHeight: 23, fontWeight: '500', marginTop: -2 },
 });

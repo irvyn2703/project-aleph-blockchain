@@ -1,6 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StatusBar as RNStatusBar, StyleSheet, View } from 'react-native';
+import { AppHeader } from './src/components/AppHeader';
+import { BottomNav } from './src/components/BottomNav';
 import { getDb } from './src/db/client';
 import { clearDemoDataOnce } from './src/db/seed';
 import { ExpedienteScreen } from './src/screens/ExpedienteScreen';
@@ -34,17 +36,26 @@ export default function App() {
 
   return (
     <View style={styles.safe}>
-      <StatusBar style="light" />
-      {screen === 'home' ? (
-        <HomeScreen qvacLabel={qvacLabel} onOpen={setScreen} refreshToken={tick} />
-      ) : null}
-      {screen === 'presupuestos' ? (
-        <PresupuestosScreen onBack={() => setScreen('home')} onChanged={() => setTick((n) => n + 1)} />
-      ) : null}
-      {screen === 'gastos' ? (
-        <GastosScreen onBack={() => setScreen('home')} onChanged={() => setTick((n) => n + 1)} />
-      ) : null}
-      {screen === 'expediente' ? <ExpedienteScreen onBack={() => setScreen('home')} /> : null}
+      <StatusBar style="dark" backgroundColor={colors.bg} />
+      <AppHeader />
+      <View style={styles.content}>
+        {screen === 'home' || screen === 'assistant' ? (
+          <HomeScreen
+            mode={screen}
+            qvacLabel={qvacLabel}
+            onOpen={setScreen}
+            refreshToken={tick}
+          />
+        ) : null}
+        {screen === 'presupuestos' ? (
+          <PresupuestosScreen onBack={() => setScreen('home')} onChanged={() => setTick((n) => n + 1)} />
+        ) : null}
+        {screen === 'gastos' ? (
+          <GastosScreen onBack={() => setScreen('home')} onChanged={() => setTick((n) => n + 1)} />
+        ) : null}
+        {screen === 'expediente' ? <ExpedienteScreen onBack={() => setScreen('home')} /> : null}
+      </View>
+      <BottomNav active={screen} onOpen={setScreen} />
     </View>
   );
 }
@@ -53,6 +64,8 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.bg,
-    paddingTop: Platform.OS === 'android' ? 28 : 0,
+    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight ?? 24 : 47,
+    paddingBottom: Platform.OS === 'android' ? 20 : 28,
   },
+  content: { flex: 1, minHeight: 0 },
 });
